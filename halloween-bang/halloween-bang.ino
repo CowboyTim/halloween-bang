@@ -1,44 +1,25 @@
-#include <HardwareSerial.h> // Or use HardwareSerial if mapping secondary UART
+#include "HardwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
 
-const int LED_PIN = 1;       // MOSFET Gate pin
-const unsigned long FLASH_DURATION = 150; // How long the LED flash stays on (ms)
-
-bool flashing = false;
-unsigned long flashStartTime = 0;
+HardwareSerial mySerial(1);  // Use UART1
+DFRobotDFPlayerMini myDFPlayer;
 
 void setup() {
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW);
+  Serial.begin(115200);
+  mySerial.begin(9600, SERIAL_8N1, GPIO_NUM_13, GPIO_NUM_12);
 
-  // Initialize Serial for JDY-40 / debugging
-  Serial.begin(9600); 
-  // Initialize second serial or software serial for DFPlayer if needed
+  if (!myDFPlayer.begin(mySerial)) {
+    Serial.println("DFPlayer Mini not detected!");
+    while (1)
+      ;
+  }
+
+  Serial.println("DFPlayer Mini ready!");
+  myDFPlayer.volume(25);  // Volume level (0–30)
+  Serial.println("Playing File 001.mp3");
+  myDFPlayer.play(1);  // Play first track (0001.mp3)
 }
 
 void loop() {
-  // 1. Non-blocking check for incoming wireless trigger from JDY-40
-  if (Serial.available() > 0) {
-    char incomingChar = Serial.read();
-    
-    // Check for your designated trigger character (e.g., 'X' for explosion)
-    if (incomingChar == 'X') {
-      triggerExplosionSequence();
-    }
-  }
-
-  // 2. Non-blocking state management for the LED flash effect
-  if (flashing && (millis() - flashStartTime >= FLASH_DURATION)) {
-    digitalWrite(LED_PIN, LOW);
-    flashing = false;
-  }
-}
-
-void triggerExplosionSequence() {
-  // Turn on LED flash via MOSFET
-  digitalWrite(LED_PIN, HIGH);
-  flashStartTime = millis();
-  flashing = true;
-
-  // Send serial command to DFPlayer Mini to play track 001
-  // e.g., myDFPlayer.play(1); 
+  // Nothing in loop
 }
