@@ -1,3 +1,7 @@
+# install:
+#
+#  pip install pyserial
+#
 import time
 import serial
 
