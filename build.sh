@@ -16,14 +16,14 @@ function do_update(){
         arduino-cli --additional-urls "$DEV_URLS" update
         arduino-cli --additional-urls "$DEV_URLS" core install "${DEV_PLATFORM}"
         arduino-cli --additional-urls "$DEV_URLS" lib update-index
-        arduino-cli --additional-urls "$DEV_URLS" lib install 'SoftwareSerial'
+        arduino-cli --additional-urls "$DEV_URLS" lib install 'Adafruit NeoPixel' || exit 1
         arduino-cli --additional-urls "$DEV_URLS" lib upgrade
         arduino-cli --additional-urls "$DEV_URLS" board list
     }
 }
 
 function do_build(){
-    DEV_EXTRA_FLAGS="-DARDUINO_USB_MODE=1 -DARDUINO_USB_CDC_ON_BOOT=1 -D_ARDUINO_BLE_H_"
+    DEV_EXTRA_FLAGS="-DARDUINO_USB_MODE=1 -DARDUINO_USB_CDC_ON_BOOT=1 -D_ARDUINO_BLE_H_ -DESP32"
     if [ "${DEBUG:-0}" = "1" ]; then
         DEV_EXTRA_FLAGS="$DEV_EXTRA_FLAGS -DDEBUG"
     fi

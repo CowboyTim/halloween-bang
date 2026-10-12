@@ -1,8 +1,12 @@
-#include "HardwareSerial.h"
-#include "DFRobotDFPlayerMini.h"
+#include <EdSoftLED.h>
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <driver/gpio.h>
+#include <driver/rmt.h>
+
+#include "HardwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
 
 #define DFPLAYER_BUSY_PIN   GPIO_NUM_7
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
@@ -15,11 +19,18 @@
 #define BUILTIN_LED         GPIO_NUM_48
 #define BUTTON_PIN          GPIO_NUM_8
 
+
+#define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
+#define NUM_LEDS                   300  // can be shorter
+EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
+
 HardwareSerial DFPLayerSerial(2);  // Use UART2
 DFRobotDFPlayerMini myDFPlayer;
 #ifdef JDY40
 HardwareSerial JDY_serial(1);      // Use UART1
 #endif
+
+
 
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
@@ -41,8 +52,9 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *incomingData, int
 void setup() {
   Serial.begin(115200);
 
-  // LED blink disable
-  neopixelWrite(BUILTIN_LED, 0, 0, 0);
+  if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
+    Serial.println("init sender failed\n");
+  }
 
   // enable WiFi-now
   WiFi.mode(WIFI_STA);
@@ -103,6 +115,9 @@ void setup() {
   Serial.println(BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 #endif
+
+  // Fancy led strip
+  setup_led_strip();
 }
 
 void loop() {
@@ -152,6 +167,7 @@ void loop() {
   }
 #endif
   //delay(100);
+  run_ledstrip_animation();
 }
 
 int8_t is_playing() {
@@ -167,6 +183,48 @@ void play_something(uint16_t nr) {
   Serial.print("Playing File: ");
   Serial.println(nr);
   myDFPlayer.play(nr);
+}
+
+void setup_led_strip(){
+  strip.begin();           // Claims the RMT channel safely under Core 3.x
+  strip.setBrightness(40); // Keep current draw safe
+  strip.clear();
+  strip.show();
+}
+
+void run_ledstrip_animation() {
+  // Sweep the spark from start to end (+ tail offset)
+  for (int pos = 0; pos < NUM_LEDS + 10; pos++) {
+    
+    // 1. Clear the strip (turns everything off)
+    strip.clear();
+
+    // 2. Draw the spark head and its fading tail (length of 10 pixels)
+    int tailLength = 10;
+    for (int i = 0; i < tailLength; i++) {
+      int index = pos - i;
+      
+      if (index >= 0 && index < NUM_LEDS) {
+        if (i == 0) {
+          // Hot white-yellow head (Packed RGB: 0x00RRGGBB)
+          strip.setPixelColor(index, 0x00FFFFC8); 
+        } else {
+          // Fading fiery tail by scaling color intensity manually
+          int scaleFactor = 255 - (i * (255 / tailLength));
+          uint8_t r = (255 * scaleFactor) / 255;
+          uint8_t g = (80  * scaleFactor) / 255;
+          uint8_t b = (10  * scaleFactor) / 255;
+          
+          strip.setPixelColor(index, strip.Color(r, g, b));
+        }
+      }
+    }
+
+    // Push data to the strip via EdSoftLED's Core 3.x compatible RMT driver
+    strip.show();
+    
+    // Animation speed
+  }
 }
 
 #ifdef JDY40
