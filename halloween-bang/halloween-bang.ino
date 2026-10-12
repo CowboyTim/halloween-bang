@@ -27,6 +27,7 @@ DFRobotDFPlayerMini myDFPlayer;
 
 
 
+uint8_t animation_is_running = 0;
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
@@ -96,6 +97,7 @@ void setup() {
 
 void loop() {
 #if defined(BANGER)
+  // BANGER just logs some info, the OnDataRecv handles the real thing
   if(is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
@@ -103,6 +105,8 @@ void loop() {
     }
   }
 #else
+  // BUTTON loops and just checks as fast as possible the button, if set
+  // send it, and wait 0.5s to debounce/cooldown
   int buttonPressed = digitalRead(BUTTON_PIN);
   //Serial.print("button value: ");
   //Serial.println(buttonPressed);
@@ -114,10 +118,11 @@ void loop() {
     delay(500);
   }
 #endif
-
 }
 
 int8_t is_playing() {
+  if(animation_is_running)
+    return 1;
   int busyState = digitalRead(DFPLAYER_BUSY_PIN);
   if(busyState == LOW)
     return 1;
@@ -125,12 +130,17 @@ int8_t is_playing() {
 }
 
 void play_something(uint16_t nr) {
+  animation_is_running = 1;
+  // ledstrip
   run_ledstrip_animation();
+
+  // sound effect
   last_activity = millis();
   myDFPlayer.volume(30); // Volume 0-30
   Serial.print("Playing File: ");
   Serial.println(nr);
   myDFPlayer.play(nr);
+  animation_is_running = 0;
 }
 
 void setup_led_strip(){
