@@ -36,8 +36,9 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *incomingData, int
   memcpy(incomingString, incomingData, dataLen);
   incomingString[dataLen] = '\0'; // Null-terminate string
 
+  Serial.println("received data from ESP-NOW");
   if (String(incomingString) == "BANG") {
-    Serial.println("Received BANG via ESP-NOW!");
+    Serial.println("received BANG via ESP-NOW!");
     if(!is_playing()){
       play_something(1);
     } else {
