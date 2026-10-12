@@ -45,6 +45,8 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *incomingData, int
     Serial.println("Received BANG via ESP-NOW!");
     if(!is_playing()){
       play_something(1);
+    } else {
+      Serial.println("is already playing!");
     }
   }
 }
@@ -122,6 +124,7 @@ void setup() {
 
 void loop() {
 #if defined(BANGER)
+#if defined(JDY40)
   int r_received = digitalRead(JDY_P1_PIN);
   //Serial.print("DFPlayer is IDLE (Not Busy), HIGH:");
   //Serial.println(r_received);
@@ -132,10 +135,11 @@ void loop() {
       Serial.println("already playing! (BUTTON)");
     }
   }
+#endif
   if(is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
-      Serial.println("DFPlayer is PLAYING (Busy)");
+      Serial.println("DFPlayer is playing (Busy)");
     }
   }
 #else
@@ -146,8 +150,8 @@ void loop() {
     Serial.println("sending BANG");
     char messaggio[] = "BANG";
     esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
-    delay(300);
-    while (digitalRead(BUTTON_PIN) == LOW);
+    // debounce button
+    delay(500);
   }
 #endif
 
