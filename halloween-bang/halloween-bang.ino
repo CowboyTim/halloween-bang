@@ -8,13 +8,11 @@
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
+#define doYIELD yield();
+
 #define DFPLAYER_BUSY_PIN   GPIO_NUM_7
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
 #define DFPLAYER_RX_PIN     GPIO_NUM_13
-#define JDY_P1_PIN          GPIO_NUM_8
-#define JDY_SET_PIN         GPIO_NUM_6
-#define JDY_RX_PIN          GPIO_NUM_4
-#define JDY_TX_PIN          GPIO_NUM_5
 
 #define BUILTIN_LED         GPIO_NUM_48
 #define BUTTON_PIN          GPIO_NUM_8
@@ -26,9 +24,6 @@ EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
 
 HardwareSerial DFPLayerSerial(2);  // Use UART2
 DFRobotDFPlayerMini myDFPlayer;
-#ifdef JDY40
-HardwareSerial JDY_serial(1);      // Use UART1
-#endif
 
 
 
@@ -69,6 +64,7 @@ void setup() {
   // DFPPlayer serial setup
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   while(!myDFPlayer.begin(DFPLayerSerial)){
+    doYIELD;
     Serial.println("DFPlayer Mini not detected!");
     delay(500);
   }
@@ -76,31 +72,6 @@ void setup() {
   Serial.print("Will check BUSY pin number: ");
   Serial.println(DFPLAYER_BUSY_PIN);
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
-
-  // JDY-40 setup
-#ifdef JDY40
-  Serial.println("Will check JDY pin");
-  pinMode(JDY_P1_PIN, INPUT);
-  Serial.println("JDY SET PIN LOW");
-  JDY_serial.begin(9600, SERIAL_8N1, JDY_RX_PIN, JDY_TX_PIN);
-  pinMode(JDY_SET_PIN, OUTPUT);
-  digitalWrite(JDY_SET_PIN, LOW);
-  delay(100);
-  if(JDY_serial.available() > 0){
-      char c = JDY_serial.read();
-      Serial.print(c);
-  }
-  sendAtCommand("AT+VER");
-  sendAtCommand("AT+POWE9");
-  sendAtCommand("AT+RFID0017");
-  sendAtCommand("AT+DVID0017");
-  sendAtCommand("AT+RFC017");
-  sendAtCommand("AT+CLSS");
-  sendAtCommand("AT+CLSSC2");
-  Serial.println("Switching back to Transparent Transmission Mode...");
-  digitalWrite(JDY_SET_PIN, HIGH);
-  delay(100);
-#endif
 
   // for BANGER: just a callback
   esp_now_register_recv_cb(OnDataRecv);
@@ -124,18 +95,6 @@ void setup() {
 
 void loop() {
 #if defined(BANGER)
-#if defined(JDY40)
-  int r_received = digitalRead(JDY_P1_PIN);
-  //Serial.print("DFPlayer is IDLE (Not Busy), HIGH:");
-  //Serial.println(r_received);
-  if(r_received == HIGH){
-    if(!is_playing()){
-      play_something(1);
-    } else {
-      Serial.println("already playing! (BUTTON)");
-    }
-  }
-#endif
   if(is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
@@ -155,21 +114,6 @@ void loop() {
   }
 #endif
 
-#ifdef JDY40
-  while (JDY_serial.available() > 0) {
-    String line = JDY_serial.readStringUntil('\n');
-    line.trim();
-    Serial.print("UART GOT: ");
-    Serial.println(line);
-    if(line == "BANG"){
-      if(!is_playing()){
-        play_something(1);
-      } else {
-        Serial.println("already playing! (UART=BANG)");
-      }
-    }
-  }
-#endif
 }
 
 int8_t is_playing() {
@@ -199,6 +143,7 @@ void run_ledstrip_animation() {
   // Sweep the spark from start to end (+ tail offset),
   // pos+=5 to PACE Fast! see also the delay(5)
   for (int pos = 0; pos < NUM_LEDS + 10; pos+=5) {
+    doYIELD;
     
     // 1. Clear the internal buffer instantly (uses fast memory clearing)
     strip.clear();
@@ -206,6 +151,7 @@ void run_ledstrip_animation() {
     // 2. Draw only the active tail window (much faster than looping all 300 LEDs)
     int tailLength = 10;
     for (int i = 0; i < tailLength; i++) {
+      doYIELD;
       int index = pos - i;
       
       if (index >= 0 && index < NUM_LEDS) {
@@ -226,6 +172,7 @@ void run_ledstrip_animation() {
 
     // 3. Add random sputtering sparks along the fuse (classic crackling fuse effect)
     for (int s = 0; s < 4; s++) {
+      doYIELD;
       int randomSpark = random(NUM_LEDS);
       // Only drop a spark near the active burning area or behind it
       if (randomSpark < pos && randomSpark > pos - 25) {
@@ -241,20 +188,3 @@ void run_ledstrip_animation() {
     // delay(5); 
   }
 }
-
-#ifdef JDY40
-void sendAtCommand(String command) {
-  Serial.print("Sending: ");
-  Serial.println(command);
-  JDY_serial.println(command);
-  
-  delay(300);
-  
-  while (JDY_serial.available() > 0) {
-    String line = JDY_serial.readStringUntil('\n');
-    Serial.print("Response: ");
-    Serial.println(line);
-  }
-  Serial.println("-------------------");
-}
-#endif
