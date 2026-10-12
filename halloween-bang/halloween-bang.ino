@@ -166,8 +166,6 @@ void loop() {
     }
   }
 #endif
-  //delay(100);
-  run_ledstrip_animation();
 }
 
 int8_t is_playing() {
@@ -178,6 +176,7 @@ int8_t is_playing() {
 }
 
 void play_something(uint16_t nr) {
+  run_ledstrip_animation();
   last_activity = millis();
   myDFPlayer.volume(30); // Volume 0-30
   Serial.print("Playing File: ");
@@ -187,43 +186,55 @@ void play_something(uint16_t nr) {
 
 void setup_led_strip(){
   strip.begin();           // Claims the RMT channel safely under Core 3.x
-  strip.setBrightness(40); // Keep current draw safe
+  strip.setBrightness(10); // Keep current draw safe
   strip.clear();
   strip.show();
 }
 
 void run_ledstrip_animation() {
-  // Sweep the spark from start to end (+ tail offset)
-  for (int pos = 0; pos < NUM_LEDS + 10; pos++) {
+  // Sweep the spark from start to end (+ tail offset),
+  // pos+=5 to PACE Fast! see also the delay(5)
+  for (int pos = 0; pos < NUM_LEDS + 10; pos+=5) {
     
-    // 1. Clear the strip (turns everything off)
+    // 1. Clear the internal buffer instantly (uses fast memory clearing)
     strip.clear();
 
-    // 2. Draw the spark head and its fading tail (length of 10 pixels)
+    // 2. Draw only the active tail window (much faster than looping all 300 LEDs)
     int tailLength = 10;
     for (int i = 0; i < tailLength; i++) {
       int index = pos - i;
       
       if (index >= 0 && index < NUM_LEDS) {
         if (i == 0) {
-          // Hot white-yellow head (Packed RGB: 0x00RRGGBB)
-          strip.setPixelColor(index, 0x00FFFFC8); 
+          // Hot white-yellow head
+          strip.setPixelColor(index, strip.Color(255, 180, 50)); 
         } else {
-          // Fading fiery tail by scaling color intensity manually
+          // Fading fiery tail
           int scaleFactor = 255 - (i * (255 / tailLength));
-          uint8_t r = (255 * scaleFactor) / 255;
-          uint8_t g = (80  * scaleFactor) / 255;
-          uint8_t b = (10  * scaleFactor) / 255;
+          uint8_t r = (255  * scaleFactor) / 255;
+          uint8_t g = (100  * scaleFactor) / 255;
+          uint8_t b = (0    * scaleFactor) / 255;
           
           strip.setPixelColor(index, strip.Color(r, g, b));
         }
       }
     }
 
-    // Push data to the strip via EdSoftLED's Core 3.x compatible RMT driver
+    // 3. Add random sputtering sparks along the fuse (classic crackling fuse effect)
+    for (int s = 0; s < 4; s++) {
+      int randomSpark = random(NUM_LEDS);
+      // Only drop a spark near the active burning area or behind it
+      if (randomSpark < pos && randomSpark > pos - 25) {
+        // Random bright yellow/white spark flash
+        strip.setPixelColor(randomSpark, strip.Color(255, 255, 150));
+      }
+    }
+
+    // Push the updated buffer to the physical strip via RMT
     strip.show();
     
-    // Animation speed
+    // Optional: tiny delay if you want to pace it, or remove entirely for max speed
+    // delay(5); 
   }
 }
 
