@@ -1,24 +1,3 @@
-#ifndef UART_LOG_DEV_UART0
-#define UART_LOG_DEV_UART0 1
-#endif
-
-#if UART_LOG_DEV_UART0 == 1
- #define NO_GLOBAL_INSTANCES
- #define NO_GLOBAL_SERIAL
- #include <HardwareSerial.h>
- extern HardwareSerial Serial0;
- extern HardwareSerial Serial1;
- #define UART0         Serial0
- #define USBSERIAL0    Serial0
- #define Serial        Serial0
- #define UART1         Serial1
-#else
- #include <HardwareSerial.h>
- #define UART0         Serial
- #define USBSERIAL0    Serial
- #define UART1         Serial1
-#endif // UART_LOG_DEV_UART0
-
 #include <EdSoftLED.h>
 #include <esp_now.h>
 #include <WiFi.h>
@@ -47,7 +26,6 @@ DFRobotDFPlayerMini myDFPlayer;
 
 
 
-uint8_t do_light_sleep = 0;
 uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
 unsigned long last_activity = 0;
@@ -67,7 +45,7 @@ void setup() {
 
   // enable WiFi-now
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(true);
+  WiFi.setSleep(false);
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
     return;
@@ -104,32 +82,6 @@ void setup() {
   Serial.println(BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
-  bool ok_btn = esp_sleep_is_valid_wakeup_gpio((gpio_num_t)BUTTON_PIN);
-  if(ok_btn){
-    esp_err_t err = gpio_wakeup_enable(BUTTON_PIN, GPIO_INTR_LOW_LEVEL);
-    if(err != ESP_OK){
-      Serial.print("not using light sleep: ");
-      Serial.println(esp_err_to_name(err));
-    } else {
-      err = esp_sleep_enable_gpio_wakeup();
-      if(err != ESP_OK){
-        Serial.print("not using light sleep, gpio pin not ok: ");
-        Serial.println(esp_err_to_name(err));
-      } else {
-        // Correct GPIO config for button pin PULLUP/DOWN, as we GND the button
-        err = gpio_pullup_en((gpio_num_t)BUTTON_PIN);
-        if(err == ESP_OK) {
-          err = gpio_pulldown_dis((gpio_num_t)BUTTON_PIN);
-          if(err == ESP_OK) {
-            do_light_sleep = 1;
-            Serial.println("will attempt light sleep");
-          }
-        }
-      }
-    }
-  } else {
-    Serial.println("button cant be used for light sleep");
-  }
 #endif
 
   // builtin LED (fails for the EdSoftLED's use of RMT)
@@ -155,54 +107,22 @@ void loop() {
     }
   }
 #else
-  // sleep
-  if(do_light_sleep == 1){
-    Serial.println("sleepy sleepy");
-    Serial.flush();
-    esp_err_t err = esp_light_sleep_start();
+  int buttonPressed = digitalRead(BUTTON_PIN);
+  if(buttonPressed == LOW){
+    Serial.println("ADHD style sending BANG");
+    char messaggio[] = "BANG";
+    esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
     if(err != ESP_OK){
-      Serial.print("problem light sleep: ");
+      Serial.print("problem ESP-NOW send: ");
       Serial.println(esp_err_to_name(err));
-      do_light_sleep = 0;
     } else {
-      WiFi.mode(WIFI_STA);
-      delay(15); // Let the radio stabilize
-      Serial.flush();
-      do_light_sleep = 1;
-      Serial.println("yawn, wakeup, sending BANG");
-      char messaggio[] = "BANG";
-      esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
-      if(err == ESP_OK){
-        Serial.println("BANG sent!");
-      } else {
-        Serial.print("problem sending BANG: ");
-        Serial.println(esp_err_to_name(err));
-      }
+      Serial.println("BANG sent!");
     }
+    // debounce button
+    delay(500);
+  } else {
+    delay(1);
   }
-
-  if(do_light_sleep == 0){
-    int buttonPressed = digitalRead(BUTTON_PIN);
-    //Serial.print("button value: ");
-    //Serial.println(buttonPressed);
-    if(buttonPressed == LOW){
-      Serial.println("ADHD style sending BANG");
-      char messaggio[] = "BANG";
-      esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
-    } else {
-      delay(1);
-      return;
-    }
-  }
-  
-  // debounce button
-  delay(500);
-  /*
-  while (digitalRead(BUTTON_PIN) == LOW) {
-    doYIELD;
-    delay(10);
-  }
-  */
 #endif
 }
 
