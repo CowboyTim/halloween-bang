@@ -3,7 +3,6 @@
 #include <esp_now.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
-#include <esp_bt.h>
 
 #define DFPLAYER_BUSY_PIN   GPIO_NUM_7
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
@@ -13,7 +12,7 @@
 #define JDY_RX_PIN          GPIO_NUM_4
 #define JDY_TX_PIN          GPIO_NUM_5
 
-#define LED                 GPIO_NUM_48
+#define BUILTIN_LED         GPIO_NUM_48
 #define BUTTON_PIN          GPIO_NUM_8
 
 HardwareSerial DFPLayerSerial(2);  // Use UART2
@@ -42,9 +41,8 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *incomingData, int
 void setup() {
   Serial.begin(115200);
 
-  // LED
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
+  // LED blink disable
+  neopixelWrite(BUILTIN_LED, 0, 0, 0);
 
   // enable WiFi-now
   WiFi.mode(WIFI_STA);
@@ -165,7 +163,7 @@ int8_t is_playing() {
 
 void play_something(uint16_t nr) {
   last_activity = millis();
-  myDFPlayer.volume(25); // Volume 0-30
+  myDFPlayer.volume(30); // Volume 0-30
   Serial.print("Playing File: ");
   Serial.println(nr);
   myDFPlayer.play(nr);
