@@ -50,7 +50,6 @@ function do_build(){
         --build-property build.custom_partitions=partitions \
         --build-property upload.maximum_size=1851392 \
         --board-options PartitionScheme=no_ota \
-        --board-options ZigbeeMode=zczr \
         $MODULE \
         || exit $?
 }
