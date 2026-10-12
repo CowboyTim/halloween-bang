@@ -167,7 +167,7 @@ void setup_led_strip(){
 void run_ledstrip_animation() {
   // Sweep the spark from start to end (+ tail offset),
   // pos+=5 to PACE Fast! see also the delay(5)
-  for (int pos = 0; pos < NUM_LEDS + 10; pos+=5) {
+  for (int pos = 0; pos < NUM_LEDS + 10; pos+=3) {
     doYIELD;
     
     // 1. Clear the internal buffer instantly (uses fast memory clearing)
