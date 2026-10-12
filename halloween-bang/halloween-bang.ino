@@ -59,7 +59,8 @@ void setup() {
     delay(500);
   }
   Serial.println("DFPlayer Mini ready!");
-  Serial.println("Will check BUSY pin");
+  Serial.print("Will check BUSY pin number: ");
+  Serial.println(DFPLAYER_BUSY_PIN);
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
 
   // JDY-40 setup
