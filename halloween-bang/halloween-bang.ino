@@ -14,9 +14,8 @@
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
 #define DFPLAYER_RX_PIN     GPIO_NUM_13
 
-#define BUILTIN_LED         GPIO_NUM_48
+#define BUILTIN_LED         GPIO_NUM_21
 #define BUTTON_PIN          GPIO_NUM_8
-
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
 #define NUM_LEDS                   300  // can be shorter
@@ -82,6 +81,9 @@ void setup() {
 
   // Fancy led strip
   setup_led_strip();
+
+  // builtin LED (fails for the EdSoftLED's use of RMT)
+  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 }
 
 void loop() {
