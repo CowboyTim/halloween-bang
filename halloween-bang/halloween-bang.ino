@@ -28,24 +28,13 @@ DFRobotDFPlayerMini myDFPlayer;
 
 
 uint8_t animation_is_running = 0;
+uint8_t trigger_animation = 0;
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
-void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *incomingData, int len) {
-  char incomingString[32];
-  int dataLen = len < sizeof(incomingString) - 1 ? len : sizeof(incomingString) - 1;
-  memcpy(incomingString, incomingData, dataLen);
-  incomingString[dataLen] = '\0'; // Null-terminate string
-
-  Serial.println("received data from ESP-NOW");
-  if (String(incomingString) == "BANG") {
-    Serial.println("received BANG via ESP-NOW!");
-    if(!is_playing()){
-      play_something(1);
-    } else {
-      Serial.println("is already playing!");
-    }
-  }
+void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
+  if(strncmp((const char *)msg, "BANG", len) == 0)
+    trigger_animation = 1; 
 }
 
 void setup() {
@@ -98,6 +87,15 @@ void setup() {
 void loop() {
 #if defined(BANGER)
   // BANGER just logs some info, the OnDataRecv handles the real thing
+  if(trigger_animation == 1){
+    trigger_animation = 0;
+    Serial.println("received DEMOLITION request!");
+    if(!is_playing()){
+      play_something();
+    } else {
+      Serial.println("animation already running");
+    }
+  }
   if(is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
@@ -129,7 +127,7 @@ int8_t is_playing() {
   return 0;
 }
 
-void play_something(uint16_t nr) {
+void play_something() {
   animation_is_running = 1;
   // ledstrip
   run_ledstrip_animation();
@@ -137,9 +135,8 @@ void play_something(uint16_t nr) {
   // sound effect
   last_activity = millis();
   myDFPlayer.volume(30); // Volume 0-30
-  Serial.print("Playing File: ");
-  Serial.println(nr);
-  myDFPlayer.play(nr);
+  Serial.println("Playing File: 1");
+  myDFPlayer.play(1);
   animation_is_running = 0;
 }
 
