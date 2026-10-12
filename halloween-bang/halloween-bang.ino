@@ -17,8 +17,10 @@
 #define BUTTON_PIN          GPIO_NUM_8
 
 HardwareSerial DFPLayerSerial(2);  // Use UART2
-HardwareSerial JDY_serial(1);      // Use UART1
 DFRobotDFPlayerMini myDFPlayer;
+#ifdef JDY40
+HardwareSerial JDY_serial(1);      // Use UART1
+#endif
 
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
@@ -64,6 +66,7 @@ void setup() {
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
 
   // JDY-40 setup
+#ifdef JDY40
   Serial.println("Will check JDY pin");
   pinMode(JDY_P1_PIN, INPUT);
   Serial.println("JDY SET PIN LOW");
@@ -85,6 +88,7 @@ void setup() {
   Serial.println("Switching back to Transparent Transmission Mode...");
   digitalWrite(JDY_SET_PIN, HIGH);
   delay(100);
+#endif
 
   // for BANGER: just a callback
   esp_now_register_recv_cb(OnDataRecv);
@@ -134,6 +138,7 @@ void loop() {
   }
 #endif
 
+#ifdef JDY40
   while (JDY_serial.available() > 0) {
     String line = JDY_serial.readStringUntil('\n');
     line.trim();
@@ -147,6 +152,7 @@ void loop() {
       }
     }
   }
+#endif
   //delay(100);
 }
 
@@ -165,6 +171,7 @@ void play_something(uint16_t nr) {
   myDFPlayer.play(nr);
 }
 
+#ifdef JDY40
 void sendAtCommand(String command) {
   Serial.print("Sending: ");
   Serial.println(command);
@@ -179,10 +186,4 @@ void sendAtCommand(String command) {
   }
   Serial.println("-------------------");
 }
-
-void disableWireless() {
-    WiFi.mode(WIFI_OFF);
-    esp_wifi_stop();
-    esp_bt_controller_disable();
-}
-
+#endif
