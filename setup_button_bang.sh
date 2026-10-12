@@ -1,4 +1,10 @@
 #!/bin/bash
+B=$1
+shift
+if [ "$B" != "BUTTON" -a "$B" != "BANG" ]; then
+    echo "usage: $BASH_SOURCE <BUTTON|BANG>"
+    exit 1
+fi
 T=${T:-/dev/ttyUSB0}
 def=0017
 RFID=${RFID:-$def}
@@ -21,10 +27,18 @@ sleep 1
 echo "POWER=-12db  (9)"
 echo -ne "AT+POWE9\r\n"     >> $T 
 sleep 1
-echo "CLSS=C1  (button relay, default down -> UP)"
-echo -ne "AT+CLSSC1\r\n"    >> $T 
-sleep 1
-echo -ne "AT+CLSS\r\n"      >> $T 
-sleep 1
+if [ "$B" = "BUTTON" ]; then
+    echo "CLSS=C1  (button relay, default down -> UP)"
+    echo -ne "AT+CLSSC1\r\n"    >> $T 
+    sleep 1
+    echo -ne "AT+CLSS\r\n"      >> $T 
+    sleep 1
+else
+    echo "CLSS=C3  (BANG receiver, default down -> UP)"
+    echo -ne "AT+CLSSC3\r\n"    >> $T 
+    sleep 1
+    echo -ne "AT+CLSS\r\n"      >> $T 
+    sleep 1
+fi
 kill %1
 wait
