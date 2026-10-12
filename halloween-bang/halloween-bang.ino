@@ -137,14 +137,23 @@ int8_t is_playing() {
 
 void play_something() {
   animation_is_running = 1;
-  // ledstrip
-  run_ledstrip_animation();
-
-  // sound effect
   last_activity = millis();
+
+  // sound effect 1 (Whooosh)
   myDFPlayer.volume(30); // Volume 0-30
   Serial.println("Playing File: 1");
   myDFPlayer.play(1);
+
+  // ledstrip
+  run_ledstrip_animation();
+
+  // sound effect (Kabooom)
+  myDFPlayer.stop();
+  myDFPlayer.volume(30); // Volume 0-30
+  Serial.println("Playing File: 2");
+  myDFPlayer.play(2);
+
+  // done
   animation_is_running = 0;
 }
 
