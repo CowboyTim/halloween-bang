@@ -42,7 +42,14 @@
 
 #define WAIT_TIME_BUTTON    3000        // configurable wait time (ms) for button mode - time of animation the banger is showing
 
-#define doYIELD myYIELD()
+#define IS_BUTTON     1
+#define IS_BANGER     2
+#ifdef BUTTON
+uint8_t WHAT = IS_BUTTON;
+#endif
+#ifdef BANGER
+uint8_t WHAT = IS_BANGER;
+#endif
 
 #define LINE_START    0
 #define LINE_END    111
@@ -56,13 +63,15 @@ EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
 HardwareSerial DFPLayerSerial(2);  // Use UART2
 DFRobotDFPlayerMini myDFPlayer;
 
-#define WATCHDOG_TIMEOUT_MS 60000   // 60s
-esp_task_wdt_user_handle_t wdt_user_handle;
-
 uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
+
+#define WATCHDOG_TIMEOUT_MS 60000   // 60s
+esp_task_wdt_user_handle_t wdt_user_handle;
+
+#define doYIELD myYIELD()
 
 #define LOG(...)        _log_l(__VA_ARGS__);
 #define NOINLINE        __attribute__((noinline,noipa))
@@ -201,27 +210,28 @@ void IRAM_ATTR button_pressed() {
   portEXIT_CRITICAL_ISR(&r_mux);
 }
 
-void setup() {
-  UART0.begin(115200);
+void button_setup(){
+  // Register peer
+  // for BUTTON: target receiverAddress
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, receiverAddress, 6);
+  peerInfo.channel = 0;  
+  peerInfo.encrypt = false;
+  esp_now_add_peer(&peerInfo);
 
-  setup_wdt();
+  LOG("button INPUT_PULLUP PIN: %d", BUTTON_PIN);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // 12V LED control
+  pinMode(LED_12V_PIN, OUTPUT);
+  digitalWrite(LED_12V_PIN, HIGH);  // ON at wait time
+  // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
 
-  // builtin LED (fails for the EdSoftLED's use of RMT)
-  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
+  // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
+  setup_cpu_speed(80);
+}
 
-  if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
-    LOG("init sender failed");
-  }
-
-  // enable WiFi-now
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  if (esp_now_init() != ESP_OK) {
-    LOG("Error initializing ESP-NOW");
-    return;
-  }
-
-#if defined(BANGER)
+void banger_setup(){
   // Fancy led strip
   setup_led_strip();
 
@@ -257,33 +267,36 @@ void setup() {
 
   // for BANGER: just a callback
   esp_now_register_recv_cb(OnDataRecv);
-#else
-  // Register peer
-  // for BUTTON: target receiverAddress
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, receiverAddress, 6);
-  peerInfo.channel = 0;  
-  peerInfo.encrypt = false;
-  esp_now_add_peer(&peerInfo);
-
-  LOG("button INPUT_PULLUP PIN: %d", BUTTON_PIN);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  // 12V LED control
-  pinMode(LED_12V_PIN, OUTPUT);
-  digitalWrite(LED_12V_PIN, HIGH);  // ON at wait time
-  // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
-
-  // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
-  setup_cpu_speed(80);
-
-#endif
 }
 
-void loop() {
-  doYIELD;
+void setup() {
+  UART0.begin(115200);
 
-#if defined(BANGER)
+  setup_wdt();
+
+  // builtin LED (fails for the EdSoftLED's use of RMT)
+  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
+
+  if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
+    LOG("init sender failed");
+  }
+
+  // enable WiFi-now
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  if (esp_now_init() != ESP_OK) {
+    LOG("Error initializing ESP-NOW");
+    return;
+  }
+  if(WHAT == IS_BANGER){
+     banger_setup();
+  }
+  if(WHAT == IS_BUTTON){
+     button_setup();
+  }
+}
+
+void do_banger_loop(){
   // BANGER just logs some info, the OnDataRecv handles the real thing
   if(trigger_animation == 1){
     trigger_animation = 0;
@@ -306,7 +319,9 @@ void loop() {
       LOG("READY TO DEMOLISH");
     }
   }
-#else
+}
+
+void do_button_loop(){
   uint8_t do_send_bang = 0;
   portENTER_CRITICAL(&r_mux);
   if(button_was_pressed){
@@ -331,7 +346,16 @@ void loop() {
   } else {
     delay(5);
   }
-#endif
+}
+
+void loop() {
+  doYIELD;
+  if(WHAT == IS_BANGER){
+      do_banger_loop();
+  }
+  if(WHAT == IS_BUTTON){
+      do_button_loop();
+  }
 }
 
 uint8_t animation_is_playing() {
