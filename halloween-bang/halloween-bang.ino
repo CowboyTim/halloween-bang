@@ -59,6 +59,8 @@ void myYIELD(){
 void setup() {
   Serial.begin(115200);
 
+  setup_wdt();
+
   // builtin LED (fails for the EdSoftLED's use of RMT)
   //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 
@@ -288,7 +290,7 @@ void run_ledstrip_animation_2() {
   }
 }
 
-void setup_wtd(){
+void setup_wdt(){
   esp_err_t ok;
 
   // First, deinitialize the Arduino core's WDT if it exists
@@ -313,8 +315,13 @@ void setup_wtd(){
   if(ok != ESP_OK) {
     Serial.print("[WDT] Failed to register task: ");
     Serial.println(esp_err_to_name(ok));
-    return;
   } else {
     Serial.println("[WDT] Watchdog timeout callback registered successfully");
   }
+}
+
+void esp_task_wdt_isr_user_handler(void){
+  // CRITICAL: Must use abort() not esp_restart() in ISR context!
+  // esp_restart() is NOT ISR-safe and will trigger Interrupt WDT
+  Serial.println("[WDT] 1 Task watchdog timeout occurred!");
 }
