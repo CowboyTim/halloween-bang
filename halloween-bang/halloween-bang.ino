@@ -187,7 +187,7 @@ void IRAM_ATTR button_pressed() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  UART0.begin(115200);
 
   setup_wdt();
 
