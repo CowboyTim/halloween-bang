@@ -330,6 +330,7 @@ void do_button_loop(){
   }
   portEXIT_CRITICAL(&r_mux);
   if(do_send_bang){
+      digitalWrite(LED_12V_PIN, LOW);
       LOG("ADHD style sending BANG");
       char messaggio[] = "BANG";
       esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
