@@ -52,8 +52,8 @@ uint8_t WHAT = IS_BANGER;
 #endif
 
 #define LINE_START    0
-#define LINE_END    151
-#define RING_START  152
+#define LINE_END    119
+#define RING_START  120
 #define RING_END    299
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
@@ -422,99 +422,227 @@ void setup_led_strip(){
   strip.show();
 }
 
-void run_ledstrip_animation_1() {
-  // Sweep the spark from start to end (+ tail offset),
-  // pos+=5 to PACE Fast! see also the delay(5)
-  LOG("RUNNING Animation LED 1");
-  for (int pos = LINE_START; pos < LINE_END + 10; pos+=3) {
-    doYIELD;
-    
-    // 1. Clear the internal buffer instantly (uses fast memory clearing)
-    strip.clear();
+// ==== ANIMATIONS BEGIN ====
+// -------------------------------------------------------------------------
+//  TUNING - change these to taste
+// -------------------------------------------------------------------------
+#define FUSE_LEN          (LINE_END - LINE_START + 1)   // 152 LEDs
+#define RING_LEN          (RING_END - RING_START + 1)   // 148 LEDs
+#define FUSE_TAIL         14      // length of the glowing trail behind the spark (LEDs)
 
-    // 2. Draw only the active tail window (much faster than looping all 300 LEDs)
-    int tailLength = 10;
-    for (int i = 0; i < tailLength; i++) {
-      doYIELD;
-      int index = pos - i;
-      
-      if (index >= 0 && index < NUM_LEDS) {
-        if (i == 0) {
-          // Hot white-yellow head
-          strip.setPixelColor(index, strip.Color(255, 180, 50)); 
-        } else {
-          // Fading fiery tail
-          int scaleFactor = 255 - (i * (255 / tailLength));
-          uint8_t r = (255  * scaleFactor) / 255;
-          uint8_t g = (100  * scaleFactor) / 255;
-          uint8_t b = (0    * scaleFactor) / 255;
-          
-          strip.setPixelColor(index, strip.Color(r, g, b));
-        }
-      }
+#define FUSE_BURN_MS      6000    // time for the spark to run the fuse (match SOUND_1 length)
+#define FAKEOUT_ENABLED   1       // 1 = spark stalls, nearly dies, re-ignites with a flare
+#define FAKEOUT_AT_PCT    55      // where it stalls (% of the way along the fuse)
+#define FAKEOUT_MS        1000    // how long the stall lasts
+
+#define RING_IGNITE_MS    1800    // fire spreads both ways around the ring
+#define BUILDUP_MIN_MS    2000    // minimum "about to blow" time (also waits for SOUND_1 to end)
+#define BUILDUP_MAX_MS    15000   // safety: never wait longer than this for the sound
+
+#define KABOOM_FLASH_MS   180     // white flash (vampire disappears here!)
+#define KABOOM_FIRE_MS    600     // flash + fireball fade
+#define KABOOM_TOTAL_MS   3800    // whole KABOOM animation incl. embers + purple ghost wisp
+
+// -------------------------------------------------------------------------
+//  Helpers
+// -------------------------------------------------------------------------
+float clampf(float x, float lo, float hi) { return x < lo ? lo : (x > hi ? hi : x); }
+float rnd01() { return random(0, 1000) / 1000.0f; }
+
+uint32_t rgbf(float r, float g, float b) {
+  return strip.Color((uint8_t)clampf(r, 0, 255), (uint8_t)clampf(g, 0, 255), (uint8_t)clampf(b, 0, 255));
+}
+
+// Black-body style fire palette: 0 = black, 0.33 = red, 0.66 = orange/yellow, 1 = white
+uint32_t fireColor(float h) {
+  h = clampf(h, 0.0f, 1.0f) * 3.0f;
+  return rgbf(h * 255.0f, (h - 1.0f) * 255.0f, (h - 2.0f) * 255.0f);
+}
+
+// Moment (ms since start) the spark reaches the end of the fuse
+float fuse_cross_ms() {
+  float te = powf((float)FUSE_LEN / (FUSE_LEN + FUSE_TAIL), 1.0f / 1.25f) * FUSE_BURN_MS;
+#if FAKEOUT_ENABLED
+  float stallT = powf(FAKEOUT_AT_PCT / 100.0f, 1.0f / 1.25f) * FUSE_BURN_MS;
+  if (te >= stallT) te += FAKEOUT_MS;
+#endif
+  return te;
+}
+
+// Spark position in LEDs (can be > FUSE_LEN so the tail runs off the end).
+// The spark accelerates along the fuse. stallFrac >= 0 while stalled (0..1), flare = just re-ignited.
+float fuse_head_pos(uint32_t ms, float *stallFrac, bool *flare) {
+  float te = (float)ms;
+  *stallFrac = -1.0f;
+  *flare = false;
+#if FAKEOUT_ENABLED
+  float stallT = powf(FAKEOUT_AT_PCT / 100.0f, 1.0f / 1.25f) * FUSE_BURN_MS;
+  if (ms >= stallT) {
+    if (ms < stallT + FAKEOUT_MS) {
+      te = stallT;
+      *stallFrac = (ms - stallT) / (float)FAKEOUT_MS;
+    } else {
+      te = ms - FAKEOUT_MS;
+      if (ms < stallT + FAKEOUT_MS + 350) *flare = true;
     }
-
-    // 3. Add random sputtering sparks along the fuse (classic crackling fuse effect)
-    for (int s = 0; s < 4; s++) {
-      doYIELD;
-      int randomSpark = random(NUM_LEDS);
-      // Only drop a spark near the active burning area or behind it
-      if (randomSpark < pos && randomSpark > pos - 25) {
-        // Random bright yellow/white spark flash
-        strip.setPixelColor(randomSpark, strip.Color(255, 255, 150));
-      }
-    }
-
-    // Push the updated buffer to the physical strip via RMT
-    strip.show();
-    
-    // Optional: tiny delay if you want to pace it, or remove entirely for max speed
-    // delay(5); 
   }
-  strip.clear();
-  strip.show();
+#endif
+  return powf(clampf(te / FUSE_BURN_MS, 0.0f, 1.0f), 1.25f) * (FUSE_LEN + FUSE_TAIL);
+}
+
+// -------------------------------------------------------------------------
+//  Fuse: brown twisted rope, white-hot spark, fiery trail, burnt = dark
+// -------------------------------------------------------------------------
+void draw_fuse(uint32_t ms) {
+  float stallFrac; bool flare;
+  float head = fuse_head_pos(ms, &stallFrac, &flare);
+  int tail = flare ? FUSE_TAIL * 2 : FUSE_TAIL;
+
+  float k = 1.0f;                                   // spark brightness (dies during the fake-out)
+  if (stallFrac >= 0.0f)
+    k = clampf(1.0f - stallFrac * 1.4f, 0.0f, 1.0f) * (0.4f + 0.6f * rnd01());
+
+  for (int i = 0; i < FUSE_LEN; i++) {
+    float d = head - i;
+    uint32_t c = 0;
+    if (d < 0) {
+      c = ((i / 2) % 2) ? rgbf(95, 45, 6) : rgbf(55, 22, 2);      // unburnt rope (twist pattern)
+    } else if (d < tail) {
+      float h = (1.0f - d / tail) * 0.85f + rnd01() * 0.15f;
+      c = fireColor(h * k);
+      if (d < 1.5f) c = flare ? rgbf(255, 255, 255) : rgbf(255 * k, 200 * k, 90 * k);
+    }
+    strip.setPixelColor(LINE_START + i, c);
+  }
+
+  // crackling sparks around the head
+  if (stallFrac < 0.0f) {
+    for (int s = 0; s < 3; s++) {
+      int idx = (int)head + random(-6, 7);
+      if (idx >= 0 && idx < FUSE_LEN) strip.setPixelColor(LINE_START + idx, rgbf(255, 220, 100));
+    }
+  } else if (stallFrac > 0.7f && random(8) == 0) {   // last dying ember
+    int idx = (int)head;
+    if (idx >= 0 && idx < FUSE_LEN) strip.setPixelColor(LINE_START + idx, rgbf(120, 10, 0));
+  }
+}
+
+// -------------------------------------------------------------------------
+//  Ring: dark dynamite until the spark arrives, then fire spreads both ways,
+//  flickers faster and whiter ("build-up") until KABOOM
+// -------------------------------------------------------------------------
+void draw_ring(uint32_t ms, float ringStartMs) {
+  if (ms < ringStartMs) {
+    for (int j = 0; j < RING_LEN; j++) strip.setPixelColor(RING_START + j, rgbf(60, 5, 0));
+    return;
+  }
+  float rt     = ms - ringStartMs;
+  float spread = clampf(rt / RING_IGNITE_MS, 0.0f, 1.0f) * (RING_LEN / 2.0f);
+  float build  = clampf((rt - RING_IGNITE_MS) / (float)BUILDUP_MIN_MS, 0.0f, 1.0f);
+  float speed  = 0.010f * (1.0f + build * 2.5f);
+
+  for (int j = 0; j < RING_LEN; j++) {
+    int d = (j < RING_LEN - j) ? j : (RING_LEN - j);   // distance from where the fuse enters
+    uint32_t c;
+    if (d <= spread) {
+      float h = (0.65f + 0.15f * build) * (0.45f + 0.55f * rnd01())
+              + 0.20f * sinf(j * 0.8f - ms * speed)
+              + 0.45f * build * build;
+      c = fireColor(h);
+      if (rt < RING_IGNITE_MS && d > spread - 2) c = rgbf(255, 240, 200);   // white-hot leading edge
+    } else {
+      c = rgbf(60, 5, 0);
+    }
+    strip.setPixelColor(RING_START + j, c);
+  }
+}
+
+// -------------------------------------------------------------------------
+//  Animation 1 (during SOUND_1): fuse burns -> ring ignites -> build-up.
+//  Does NOT clear at the end: the ring keeps glowing white-hot until KABOOM.
+// -------------------------------------------------------------------------
+void run_ledstrip_animation_1() {
+  LOG("RUNNING Animation LED 1: fuse + ring ignition");
+  float ringStart = fuse_cross_ms();
+  uint32_t buildDone = (uint32_t)(ringStart + RING_IGNITE_MS + BUILDUP_MIN_MS);
+  uint32_t t0 = millis();
+
+  for (;;) {
+    doYIELD;
+    uint32_t ms = millis() - t0;
+    strip.clear();
+    draw_fuse(ms);
+    draw_ring(ms, ringStart);
+    strip.show();
+
+    if (ms >= buildDone && !sound_is_playing()) break;
+    if (ms >= buildDone + BUILDUP_MAX_MS) break;      // safety net
+    delay(2);
+  }
   LOG("RUNNING Animation LED 1: DONE");
 }
 
+// -------------------------------------------------------------------------
+//  Animation 2 (during SOUND_2): KABOOM flash + shockwave down the fuse,
+//  fading fireball, dying embers, purple ghost wisp drifting back along the fuse.
+// -------------------------------------------------------------------------
 void run_ledstrip_animation_2() {
-  LOG("RUNNING Animation LED 2: Inferno Ring");
-  
-  // Run for more frames or a slightly faster cadence to increase intensity
-  for (int frame = 0; frame < 80; frame++) {
+  LOG("RUNNING Animation LED 2: KABOOM");
+  uint32_t t0 = millis();
+
+  for (;;) {
     doYIELD;
+    uint32_t ms = millis() - t0;
+    if (ms >= KABOOM_TOTAL_MS) break;
     strip.clear();
 
-    // Iterate across the ring LEDs surrounding the target
-    for (int rIdx = RING_START; rIdx <= RING_END; rIdx++) {
-      // Create wild, erratic fire variations (deep reds, bright oranges, and sudden white-hot flare-ups)
-      int flameColorType = random(0, 10);
-      
-      if (flameColorType < 3) {
-        // Sudden violent white-hot flare - more orange/yellow white
-        strip.setPixelColor(rIdx, strip.Color(255, 150, 50));
-      } else if (flameColorType < 7) {
-        // Intense fiery orange/yellow - increased brightness with green for orange
-        int intensity = random(200, 255);
-        int green = random(50, 200);
-        strip.setPixelColor(rIdx, strip.Color(255, green, 0));
-      } else {
-        // Deep glowing ember red - with some orange mixed in
-        int redIntensity = random(150, 255);
-        int green = random(20, 80);
-        strip.setPixelColor(rIdx, strip.Color(redIntensity, green, 0));
+    if (ms < KABOOM_FIRE_MS) {
+      // ring: white flash that cools to orange/red
+      float cool = (ms < KABOOM_FLASH_MS) ? 1.0f
+                 : 1.0f - (ms - KABOOM_FLASH_MS) / (float)(KABOOM_FIRE_MS - KABOOM_FLASH_MS);
+      for (int j = 0; j < RING_LEN; j++) {
+        float h = (ms < KABOOM_FLASH_MS) ? 1.0f : (0.15f + 0.85f * cool) * (0.4f + 0.6f * rnd01());
+        strip.setPixelColor(RING_START + j, fireColor(h));
+      }
+      // shockwave racing back down the fuse
+      float front = ms * 1.2f;                           // LEDs per ms
+      for (int i = 0; i < FUSE_LEN; i++) {
+        float dist = (FUSE_LEN - 1 - i);
+        if (dist < front && dist > front - 25) {
+          float b = 1.0f - (front - dist) / 25.0f;
+          strip.setPixelColor(LINE_START + i, rgbf(255 * b, 220 * b, 160 * b));
+        }
+      }
+    } else {
+      float tC = ms - KABOOM_FIRE_MS;
+      float fade = 1.0f - tC / (float)(KABOOM_TOTAL_MS - KABOOM_FIRE_MS);
+
+      // dying embers on the ring
+      for (int j = 0; j < RING_LEN; j++) {
+        if (random(100) < (int)(4 + 22 * fade)) {
+          float e = (0.3f + 0.7f * rnd01()) * fade;
+          strip.setPixelColor(RING_START + j, rgbf(255 * e, 40 * e, 0));
+        }
+      }
+      // purple ghost wisp drifting away from the ring along the fuse
+      float front = tC * 0.06f;                          // LEDs per ms
+      for (int i = 0; i < FUSE_LEN; i++) {
+        float dist = (FUSE_LEN - 1 - i);
+        if (dist < front) {
+          float w = (0.5f + 0.5f * sinf(dist * 0.09f - tC * 0.006f)) * fade;
+          strip.setPixelColor(LINE_START + i, rgbf(110 * w, 10 * w, 220 * w));
+        }
       }
     }
-
     strip.show();
-    
-    // Short delay to keep it blazing fast and frantic
-    delay(20); 
+    delay(2);
   }
-  
+
   strip.clear();
   strip.show();
   LOG("RUNNING Animation LED 2: DONE");
 }
+// ==== ANIMATIONS END ====
 
 void setup_wdt(){
   esp_err_t ok;
