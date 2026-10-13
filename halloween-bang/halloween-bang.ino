@@ -184,10 +184,10 @@ void loop() {
 #if defined(BANGER)
   // BANGER just logs some info, the OnDataRecv handles the real thing
   if(trigger_animation == 1){
-    printed_ready = 0;
     trigger_animation = 0;
     Serial.println("received DEMOLITION request!");
     if(!animation_is_playing()){
+      printed_ready = 0;
       play_something();
     } else {
       Serial.println("animation already running");
