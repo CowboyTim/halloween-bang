@@ -195,14 +195,14 @@ void setup() {
   //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 
   if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
-    Serial.println("init sender failed\n");
+    LOG("init sender failed");
   }
 
   // enable WiFi-now
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
+    LOG("Error initializing ESP-NOW");
     return;
   }
 
@@ -212,34 +212,33 @@ void setup() {
 
   // DFPPlayer serial setup
   doYIELD;
-  Serial.println("DFPlayer Mini WAIT 1");
+  LOG("DFPlayer Mini WAIT 1");
   delay(1000);
-  Serial.println("DFPlayer UART setup");
+  LOG("DFPlayer UART setup");
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  Serial.println("DFPlayer Mini WAIT 2");
+  LOG("DFPlayer Mini WAIT 2");
   delay(1000);
-  Serial.println("DFPlayer Mini setup START");
+  LOG("DFPlayer Mini setup START");
   while(!myDFPlayer.begin(DFPLayerSerial, true, true)){
     doYIELD;
-    Serial.println("DFPlayer Mini not detected!");
+    LOG("DFPlayer Mini not detected!");
     delay(500);
   }
   doYIELD;
-  Serial.println("DFPlayer Mini ready!");
-  Serial.print("Will check BUSY pin number: ");
-  Serial.println(DFPLAYER_BUSY_PIN);
+  LOG("DFPlayer Mini ready!");
+  LOG("Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
   while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
     doYIELD;
-    Serial.println("DFPlayer BUSY pin still LOW, waiting");
+    LOG("DFPlayer BUSY pin still LOW, waiting");
     delay(100);
   }
-  Serial.println("DFPlayer BUSY HIGH, continue");
+  LOG("DFPlayer BUSY HIGH, continue");
   myDFPlayer.volume(10);
   myDFPlayer.EQ(DFPLAYER_EQ_ROCK);
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
   myDFPlayer.enableDAC();
-  Serial.println("DFPlayer setup complete");
+  LOG("DFPlayer setup complete");
 
   // for BANGER: just a callback
   esp_now_register_recv_cb(OnDataRecv);
@@ -252,8 +251,7 @@ void setup() {
   peerInfo.encrypt = false;
   esp_now_add_peer(&peerInfo);
 
-  Serial.print("button INPUT_PULLUP PIN: ");
-  Serial.println(BUTTON_PIN);
+  LOG("button INPUT_PULLUP PIN: %d", BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   // 12V LED control
   pinMode(LED_12V_PIN, OUTPUT);
@@ -274,23 +272,23 @@ void loop() {
   // BANGER just logs some info, the OnDataRecv handles the real thing
   if(trigger_animation == 1){
     trigger_animation = 0;
-    Serial.println("received DEMOLITION request!");
+    LOG("received DEMOLITION request!");
     if(!animation_is_playing()){
       printed_ready = 0;
       play_something();
     } else {
-      Serial.println("animation already running");
+      LOG("animation already running");
     }
   }
   if(animation_is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
-      Serial.println("DFPlayer is playing (Busy)");
+      LOG("DFPlayer is playing (Busy)");
     }
   } else {
     if(!printed_ready){
       printed_ready = 1;
-      Serial.println("READY TO DEMOLISH");
+      LOG("READY TO DEMOLISH");
     }
   }
 #else
@@ -302,22 +300,19 @@ void loop() {
   }
   portEXIT_CRITICAL(&r_mux);
   if(do_send_bang){
-      // Turn off 12V LED when button pressed
-      digitalWrite(LED_12V_PIN, LOW);
-      Serial.println("ADHD style sending BANG");
+      LOG("ADHD style sending BANG");
       char messaggio[] = "BANG";
       esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
       if(err != ESP_OK){
-        Serial.print("problem ESP-NOW send: ");
-        Serial.println(esp_err_to_name(err));
+        LOG("problem ESP-NOW send: %s", esp_err_to_name(err));
       } else {
-        Serial.println("BANG sent!");
+        LOG("BANG sent!");
       }
       // debounce button + wait for animation time
       delay(300);
       delay(WAIT_TIME_BUTTON);
       digitalWrite(LED_12V_PIN, HIGH);
-      Serial.println("WAIT for BUTTON press, LAMP ON");
+      LOG("WAIT for BUTTON press, LAMP ON");
   } else {
     delay(5);
   }
@@ -343,7 +338,7 @@ void play_something() {
 
   // sound effect 1 (Whooosh)
   myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
-  Serial.println("Playing File: 1");
+  LOG("Playing File: 1");
   myDFPlayer.play(SOUND_1);
 
   // ledstrip clear, +1
@@ -357,7 +352,7 @@ void play_something() {
   // sound effect (Kabooom)
   myDFPlayer.stop();
   myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
-  Serial.println("Playing File: 2");
+  LOG("Playing File: 2");
   myDFPlayer.play(SOUND_2);
 
   // ledstrip +2, clear
@@ -369,7 +364,7 @@ void play_something() {
   }
 
   // done
-  Serial.println("done showing demolition animation");
+  LOG("done showing demolition animation");
   animation_is_running = 0;
   trigger_animation = 0;
   printed_ready = 0;
@@ -385,7 +380,7 @@ void setup_led_strip(){
 void run_ledstrip_animation_1() {
   // Sweep the spark from start to end (+ tail offset),
   // pos+=5 to PACE Fast! see also the delay(5)
-  Serial.println("RUNNING Animation LED 1");
+  LOG("RUNNING Animation LED 1");
   for (int pos = LINE_START; pos < LINE_END + 10; pos+=3) {
     doYIELD;
     
@@ -433,11 +428,11 @@ void run_ledstrip_animation_1() {
   }
   strip.clear();
   strip.show();
-  Serial.println("RUNNING Animation LED 1: DONE");
+  LOG("RUNNING Animation LED 1: DONE");
 }
 
 void run_ledstrip_animation_2() {
-  Serial.println("RUNNING Animation LED 2");
+  LOG("RUNNING Animation LED 2");
   for (int frame = 0; frame < 60; frame++) {
     doYIELD;
     strip.clear();
@@ -454,7 +449,7 @@ void run_ledstrip_animation_2() {
   }
   strip.clear();
   strip.show();
-  Serial.println("RUNNING Animation LED 2: DONE");
+  LOG("RUNNING Animation LED 2: DONE");
 }
 
 void setup_wdt(){
@@ -471,26 +466,24 @@ void setup_wdt(){
   };
   ok = esp_task_wdt_init(&wdt_config);
   if(ok != ESP_OK) {
-    Serial.print("Failed to initialize task watchdog: ");
-    Serial.println(esp_err_to_name(ok));
+    LOG("Failed to initialize task watchdog: %s", esp_err_to_name(ok));
     return;
   }
-  Serial.println("[WDT] Task watchdog initialized");
+  LOG("[WDT] Task watchdog initialized");
 
   // Register watchdog timeout callback
   ok = esp_task_wdt_add_user((char*)"main", &wdt_user_handle);
   if(ok != ESP_OK) {
-    Serial.print("[WDT] Failed to register task: ");
-    Serial.println(esp_err_to_name(ok));
+    LOG("[WDT] Failed to register task: %s", esp_err_to_name(ok));
   } else {
-    Serial.println("[WDT] Watchdog timeout callback registered successfully");
+    LOG("[WDT] Watchdog timeout callback registered successfully");
   }
 }
 
 void esp_task_wdt_isr_user_handler(void){
   // CRITICAL: Must use abort() not esp_restart() in ISR context!
   // esp_restart() is NOT ISR-safe and will trigger Interrupt WDT
-  Serial.println("[WDT] 1 Task watchdog timeout occurred!");
+  LOG("[WDT] 1 Task watchdog timeout occurred!");
 }
 
 
