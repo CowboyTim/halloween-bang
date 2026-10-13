@@ -18,6 +18,7 @@
 
 #define BUILTIN_LED         GPIO_NUM_21
 #define BUTTON_PIN          GPIO_NUM_8
+#define LED_12V_PIN         GPIO_NUM_5
 
 #define doYIELD myYIELD()
 
@@ -172,6 +173,9 @@ void setup() {
   Serial.print("button INPUT_PULLUP PIN: ");
   Serial.println(BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // 12V LED control
+  pinMode(LED_12V_PIN, OUTPUT);
+  digitalWrite(LED_12V_PIN, HIGH);  // ON at wait time
   // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
 
@@ -209,9 +213,12 @@ void loop() {
   }
 #else
   uint8_t do_send_bang = 0;
+  uint32_t wait_time = 5000; // configurable wait time (ms) = time of animation the banger is showing
   portENTER_CRITICAL(&r_mux);
   if(button_was_pressed){
       button_was_pressed = 0;
+      // Turn off 12V LED when button pressed
+      digitalWrite(LED_12V_PIN, LOW);
       do_send_bang = 1;
   }
   portEXIT_CRITICAL(&r_mux);
@@ -225,12 +232,11 @@ void loop() {
       } else {
         Serial.println("BANG sent!");
       }
-      // debounce button
-      delay(500);
+      // debounce button + wait for animation time
+      delay(wait_time);
   } else {
     delay(5);
   }
-
 #endif
 }
 
