@@ -478,8 +478,8 @@ void run_ledstrip_animation_2() {
     doYIELD;
     strip.clear();
 
-    // Iterate across the ring LEDs surrounding the target
-    for (int rIdx = RING_START; rIdx <= RING_END; rIdx++) {
+    // Iterate across the ring LEDs surrounding the target (tail minus 40 LEDs)
+    for (int rIdx = RING_START; rIdx <= RING_END - 40; rIdx++) {
       // Create wild, erratic fire variations (deep reds, bright oranges, and sudden white-hot flare-ups)
       int flameColorType = random(0, 10);
       
@@ -487,13 +487,13 @@ void run_ledstrip_animation_2() {
         // Sudden violent white-hot flare
         strip.setPixelColor(rIdx, strip.Color(255, 255, 200));
       } else if (flameColorType < 7) {
-        // Intense fiery orange/yellow
-        int intensity = random(150, 255);
-        strip.setPixelColor(rIdx, strip.Color(255, intensity / 2, 0));
+        // Intense fiery orange/yellow - increased brightness
+        int intensity = random(200, 255);
+        strip.setPixelColor(rIdx, strip.Color(255, intensity, 0));
       } else {
-        // Deep glowing ember red
-        int redIntensity = random(100, 255);
-        strip.setPixelColor(rIdx, strip.Color(redIntensity, 10, 0));
+        // Deep glowing ember red - increased brightness
+        int redIntensity = random(150, 255);
+        strip.setPixelColor(rIdx, strip.Color(redIntensity, 20, 0));
       }
     }
 
