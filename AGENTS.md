@@ -46,3 +46,9 @@ ESP32-based Halloween decoration with sound and LED effects. Can be triggered wi
 - Review all changes with `git status` and `git diff` first
 - Commit messages should be concise and match repo style
 - Only commit when ready; use `git add -p` for selective staging if needed
+
+## Logging
+- Use `LOG(...)` macro instead of `Serial.print()` / `Serial.println()` for all debugging output
+- `LOG()` automatically prepends timestamps in `[HH:MM:SS][info]:` format
+- Converts multiple `Serial.print` calls into a single `LOG()` call with variadic arguments
+- Example: `LOG("Button pressed on pin %d", BUTTON_PIN)` replaces `Serial.print("Button pressed on pin: "); Serial.println(BUTTON_PIN)`
