@@ -270,8 +270,16 @@ void play_something() {
   // ledstrip +2, clear
   run_ledstrip_animation_2();
 
+  while(sound_is_playing()){
+    doYIELD;
+    delay(1);
+  }
+
   // done
+  Serial.println("done showing demolition animation");
   animation_is_running = 0;
+  trigger_animation = 0;
+  printed_ready = 0;
 }
 
 void setup_led_strip(){
@@ -284,6 +292,7 @@ void setup_led_strip(){
 void run_ledstrip_animation_1() {
   // Sweep the spark from start to end (+ tail offset),
   // pos+=5 to PACE Fast! see also the delay(5)
+  Serial.println("RUNNING Animation LED 1");
   for (int pos = LINE_START; pos < LINE_END + 10; pos+=3) {
     doYIELD;
     
@@ -331,9 +340,11 @@ void run_ledstrip_animation_1() {
   }
   strip.clear();
   strip.show();
+  Serial.println("RUNNING Animation LED 1: DONE");
 }
 
 void run_ledstrip_animation_2() {
+  Serial.println("RUNNING Animation LED 2");
   for (int frame = 0; frame < 60; frame++) {
     doYIELD;
     strip.clear();
@@ -350,6 +361,7 @@ void run_ledstrip_animation_2() {
   }
   strip.clear();
   strip.show();
+  Serial.println("RUNNING Animation LED 2: DONE");
 }
 
 void setup_wdt(){
