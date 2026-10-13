@@ -70,6 +70,12 @@ uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 #define ALIGN(x)        __attribute__((aligned(x)))
 #define LOG_TIME_FORMAT "[\%H:\%M:\%S][info]: "
 
+#ifdef LOG_VERBOSE
+uint8_t verbose = 1;
+#else
+uint8_t verbose = 0;
+#endif
+
 NOINLINE
 const char * PT(const char *tformat) {
   ALIGN(4) static char T_buffer[512] = {""};
@@ -96,6 +102,8 @@ void LOGPRINT(const char *buf){
       // or write with a timeout so it never freezes the CPU.
       if (!Serial) return; // Skip logging entirely if nobody is listening!
     #endif
+    if(!verbose)
+        return;
     UART0.write(buf, strlen(buf));
 }
 
