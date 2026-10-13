@@ -48,7 +48,12 @@ Both should be placed in the project directory and converted using the script ab
 
 ## Development Notes
 
+### Board GPIO Pinouts
+- **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 12/13 (DFPlayer TX/RX), GPIO 7 (BUSY pin), GPIO 21 (builtin LED), GPIO 8 (button input pullup)
+- **BUTTON mode**: Requires **ESP32 S3 SuperMini** - same GPIO assignments for button input and ESP-NOW communication
 
+### Why these boards?
+The firmware uses specific GPIO pins for the DFPlayer Mini UART (GPIO 12 TX, GPIO 13 RX) and LED strip (GPIO 4). The ESP32 S3 Zero and SuperMini have the correct pinout for these connections. Other ESP32 variants may have different pin mappings.
 
 ## Environment Variables
 - `MODULE` - Arduino project directory (default: halloween-bang)
