@@ -1,3 +1,23 @@
+#ifndef UART_LOG_DEV_UART0
+#define UART_LOG_DEV_UART0 0
+#endif
+
+#if UART_LOG_DEV_UART0 == 1
+ #define NO_GLOBAL_INSTANCES
+ #define NO_GLOBAL_SERIAL
+ #include <HardwareSerial.h>
+ extern HardwareSerial Serial0;
+ extern HardwareSerial Serial1;
+ #define UART0         Serial0
+ #define Serial        Serial0
+ #define UART1         Serial1
+#else
+ #include <HardwareSerial.h>
+ #define UART0         Serial
+ #define UART1         Serial1
+#endif // UART_LOG_DEV_UART0
+
+#include <stdlib.h>
 #include <EdSoftLED.h>
 #include <esp_now.h>
 #include <WiFi.h>
@@ -44,37 +64,98 @@ uint8_t trigger_animation = 0;
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
+#define LOG(...)        _log_l(__VA_ARGS__);
+#define NOINLINE        __attribute__((noinline,noipa))
+#define INLINE          __attribute__((always_inline))
+#define ALIGN(x)        __attribute__((aligned(x)))
+#define LOG_TIME_FORMAT "[\%H:\%M:\%S][info]: "
+
+NOINLINE
+const char * PT(const char *tformat) {
+  ALIGN(4) static char T_buffer[512] = {""};
+  static time_t t = 0;
+  static struct tm gm_new_tm = {0};
+  time(&t);
+  if(localtime_r(&t, &gm_new_tm) == NULL) {
+    T_buffer[0] = 0;
+    return (const char *)&T_buffer;
+  }
+  memset(T_buffer, 0, sizeof(T_buffer));
+  size_t s = strftime(T_buffer, sizeof(T_buffer), tformat, &gm_new_tm);
+  if(s == 0)
+    T_buffer[0] = 0;
+  return (const char *)&T_buffer;
+}
+
+NOINLINE
+void LOGPRINT(const char *buf){
+    UART0.write(buf, strlen(buf));
+}
+
+NOINLINE
+void do_vprintf(uint8_t t, const char *tf, const char *_fmt, va_list args) {
+  ALIGN(4) static char obuf[256] = {0};
+  if(_fmt == NULL && tf == NULL)
+    return;
+  if((t & 2) && tf != NULL)
+    LOGPRINT(PT(tf));
+  if(_fmt == NULL)
+    return;
+  static int s = 0;
+  s = vsnprintf(obuf, sizeof(obuf), _fmt, args);
+  if(s < 0)
+    obuf[0] = 0;
+  else if(s >= sizeof(obuf))
+    obuf[sizeof(obuf) - 1] = 0;
+  else
+    obuf[s] = 0;
+
+  if(t & 1) {
+    LOGPRINT(obuf);
+    LOGPRINT("\n");
+  } else {
+    LOGPRINT(obuf);
+  }
+}
+
+NOINLINE
+void do_printf(uint8_t t, const char *tf, const char *_fmt, ...) {
+  va_list args;
+  va_start(args, _fmt);
+  do_vprintf(t, tf, _fmt, args);
+  va_end(args);
+}
+
+NOINLINE
+void _log_l(const char *fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  do_vprintf(3, LOG_TIME_FORMAT, fmt, args);
+  va_end(args);
+}
+
+
 void setup_cpu_speed(uint32_t freq_mhz = 160) {
   uint32_t xtal_f = getXtalFrequencyMhz();
   uint32_t cpu_f = getCpuFrequencyMhz();
-  Serial.print("[ESP] Current CPU frequency: ");
-  Serial.print(cpu_f);
-  Serial.println(" MHz");
+  LOG("[ESP] Current CPU frequency: %d MHz", cpu_f);
   if(xtal_f != 0) {
-    Serial.print("[ESP] Detected XTAL frequency: ");
-    Serial.print(xtal_f);
-    Serial.println(" MHz");
+    LOG("[ESP] Detected XTAL frequency: %d MHz", xtal_f);
     if(xtal_f != 40) {
-      Serial.println("[ESP] Warning: Unusual XTAL frequency detected, expected 40 MHz");
+      LOG("[ESP] Warning: Unusual XTAL frequency detected, expected 40 MHz");
     } else {
       if(xtal_f == 40) {
         // 40 MHz XTAL, set CPU to 80, 160
         // 40 MHz XTAL also allows 10, 20, 40 MHz CPU
         cpu_f = freq_mhz;
-        Serial.print("[ESP] Setting CPU frequency to ");
-        Serial.print(cpu_f);
-        Serial.print("MHz for ");
-        Serial.print(xtal_f);
-        Serial.println("MHz XTAL");
+        LOG("[ESP] Setting CPU frequency to %d MHz for %d MHz XTAL", cpu_f, xtal_f);
         setCpuFrequencyMhz(cpu_f);
       }
       cpu_f = getCpuFrequencyMhz();
-      Serial.print("[ESP] Current CPU frequency: ");
-      Serial.print(cpu_f);
-      Serial.println(" MHz");
+      LOG("[ESP] Current CPU frequency: %d MHz", cpu_f);
     }
   } else {
-    Serial.println("[ESP] Failed to detect XTAL frequency, defaulting to 40 MHz");
+    LOG("[ESP] Failed to detect XTAL frequency, defaulting to 40 MHz");
   }
 }
 
@@ -90,8 +171,7 @@ void myYIELD(){
   if(wdt_user_handle != NULL){
       esp_err_t ok = esp_task_wdt_reset_user(wdt_user_handle);
       if(ok != ESP_OK) {
-        Serial.print("[WDT] Failed to reset WDT: ");
-        Serial.println(esp_err_to_name(ok));
+        LOG("[WDT] Failed to reset WDT: %s", esp_err_to_name(ok));
       }
   }
 }
@@ -412,4 +492,5 @@ void esp_task_wdt_isr_user_handler(void){
   // esp_restart() is NOT ISR-safe and will trigger Interrupt WDT
   Serial.println("[WDT] 1 Task watchdog timeout occurred!");
 }
+
 
