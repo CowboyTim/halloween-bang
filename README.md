@@ -48,7 +48,7 @@ Both should be placed in the project directory and converted using the script ab
 
 ## Development Notes
 
-- `setup_button_bang.py` - **This file can be removed**. It was originally for configuring a JDY-40 RF module, but that idea was disabled/removed from the project. The current firmware only uses ESP-NOW for wireless communication.
+
 
 ## Environment Variables
 - `MODULE` - Arduino project directory (default: halloween-bang)
