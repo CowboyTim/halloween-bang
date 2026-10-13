@@ -485,15 +485,15 @@ void run_ledstrip_animation_2() {
       
       if (flameColorType < 3) {
         // Sudden violent white-hot flare
-        strip.setPixelColor(rIdx, strip.Color(255, 255, 200));
+        strip.setPixelColor(rIdx, strip.Color(255, 20, 0));
       } else if (flameColorType < 7) {
-        // Intense fiery orange/yellow - increased brightness
+        // Intense fiery orange/yellow - increased brightness, minimal green
         int intensity = random(200, 255);
-        strip.setPixelColor(rIdx, strip.Color(255, intensity, 0));
+        strip.setPixelColor(rIdx, strip.Color(255, 0, 0));
       } else {
-        // Deep glowing ember red - increased brightness
+        // Deep glowing ember red - increased brightness, no green
         int redIntensity = random(150, 255);
-        strip.setPixelColor(rIdx, strip.Color(redIntensity, 20, 0));
+        strip.setPixelColor(rIdx, strip.Color(redIntensity, 0, 0));
       }
     }
 
