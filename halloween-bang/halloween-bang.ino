@@ -89,6 +89,13 @@ const char * PT(const char *tformat) {
 
 NOINLINE
 void LOGPRINT(const char *buf){
+    // For native USB CDC, check if a host is connected (if supported), 
+    // or ensure we don't block indefinitely if the buffer is full.
+    #if ARDUINO_USB_CDC_ON_BOOT
+      // If CDC is enabled, check if DTR is set (terminal is open) 
+      // or write with a timeout so it never freezes the CPU.
+      if (!Serial) return; // Skip logging entirely if nobody is listening!
+    #endif
     UART0.write(buf, strlen(buf));
 }
 
