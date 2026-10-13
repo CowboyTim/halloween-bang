@@ -9,6 +9,9 @@
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
+#define SOUND_VOLUME        20
+#define SOUND_1             1
+#define SOUND_2             2
 #define DFPLAYER_BUSY_PIN   GPIO_NUM_7
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
 #define DFPLAYER_RX_PIN     GPIO_NUM_13
@@ -249,9 +252,9 @@ void play_something() {
   last_activity = millis();
 
   // sound effect 1 (Whooosh)
-  myDFPlayer.volume(30); // Volume 0-30
+  myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
   Serial.println("Playing File: 1");
-  myDFPlayer.play(1);
+  myDFPlayer.play(SOUND_1);
 
   // ledstrip clear, +1
   run_ledstrip_animation_1();
@@ -263,9 +266,9 @@ void play_something() {
 
   // sound effect (Kabooom)
   myDFPlayer.stop();
-  myDFPlayer.volume(30); // Volume 0-30
+  myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
   Serial.println("Playing File: 2");
-  myDFPlayer.play(2);
+  myDFPlayer.play(SOUND_2);
 
   // ledstrip +2, clear
   run_ledstrip_animation_2();
