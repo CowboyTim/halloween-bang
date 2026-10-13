@@ -4,11 +4,10 @@
 #include <esp_wifi.h>
 #include <driver/gpio.h>
 #include <driver/rmt.h>
+#include <esp_task_wdt.h>
 
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
-
-#define doYIELD yield();
 
 #define DFPLAYER_BUSY_PIN   GPIO_NUM_7
 #define DFPLAYER_TX_PIN     GPIO_NUM_12
@@ -17,6 +16,13 @@
 #define BUILTIN_LED         GPIO_NUM_21
 #define BUTTON_PIN          GPIO_NUM_8
 
+#define doYIELD myYIELD()
+
+#define LINE_START    0
+#define LINE_END    111
+#define RING_START  112
+#define RING_END    299
+
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
 #define NUM_LEDS                   300  // can be shorter
 EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
@@ -24,7 +30,8 @@ EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
 HardwareSerial DFPLayerSerial(2);  // Use UART2
 DFRobotDFPlayerMini myDFPlayer;
 
-
+#define WATCHDOG_TIMEOUT_MS 60000   // 60s
+esp_task_wdt_user_handle_t wdt_user_handle;
 
 uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
@@ -32,12 +39,28 @@ unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
 void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
-  if(strncmp((const char *)msg, "BANG", len) == 0)
-    trigger_animation = 1; 
+  if(strncmp((const char *)msg, "BANG", len) == 0) {
+    trigger_animation = 1;
+  }
+}
+
+void myYIELD(){
+  yield();
+  // Reset the watchdog timer
+  if(wdt_user_handle != NULL){
+      esp_err_t ok = esp_task_wdt_reset_user(wdt_user_handle);
+      if(ok != ESP_OK) {
+        Serial.print("[WDT] Failed to reset WDT: ");
+        Serial.println(esp_err_to_name(ok));
+      }
+  }
 }
 
 void setup() {
   Serial.begin(115200);
+
+  // builtin LED (fails for the EdSoftLED's use of RMT)
+  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 
   if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
     Serial.println("init sender failed\n");
@@ -52,23 +75,42 @@ void setup() {
   }
 
 #if defined(BANGER)
+  // Fancy led strip
+  setup_led_strip();
+
   // DFPPlayer serial setup
+  doYIELD;
+  Serial.println("DFPlayer Mini WAIT 1");
+  delay(1000);
+  Serial.println("DFPlayer UART setup");
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  while(!myDFPlayer.begin(DFPLayerSerial)){
+  Serial.println("DFPlayer Mini WAIT 2");
+  delay(1000);
+  Serial.println("DFPlayer Mini setup START");
+  while(!myDFPlayer.begin(DFPLayerSerial, true, true)){
     doYIELD;
     Serial.println("DFPlayer Mini not detected!");
     delay(500);
   }
+  doYIELD;
   Serial.println("DFPlayer Mini ready!");
   Serial.print("Will check BUSY pin number: ");
   Serial.println(DFPLAYER_BUSY_PIN);
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
+  while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
+    doYIELD;
+    Serial.println("DFPlayer BUSY pin still LOW, waiting");
+    delay(100);
+  }
+  Serial.println("DFPlayer BUSY HIGH, continue");
+  myDFPlayer.volume(10);
+  myDFPlayer.EQ(DFPLAYER_EQ_ROCK);
+  myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
+  myDFPlayer.enableDAC();
+  Serial.println("DFPlayer setup complete");
 
   // for BANGER: just a callback
   esp_now_register_recv_cb(OnDataRecv);
-
-  // Fancy led strip
-  setup_led_strip();
 #else
   // Register peer
   // for BUTTON: target receiverAddress
@@ -83,24 +125,23 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
 #endif
-
-  // builtin LED (fails for the EdSoftLED's use of RMT)
-  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 }
 
 void loop() {
+  doYIELD;
+
 #if defined(BANGER)
   // BANGER just logs some info, the OnDataRecv handles the real thing
   if(trigger_animation == 1){
     trigger_animation = 0;
     Serial.println("received DEMOLITION request!");
-    if(!is_playing()){
+    if(!animation_is_playing()){
       play_something();
     } else {
       Serial.println("animation already running");
     }
   }
-  if(is_playing()){
+  if(animation_is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
       Serial.println("DFPlayer is playing (Busy)");
@@ -126,9 +167,13 @@ void loop() {
 #endif
 }
 
-int8_t is_playing() {
+uint8_t animation_is_playing() {
   if(animation_is_running)
     return 1;
+  return sound_is_playing();
+}
+
+uint8_t sound_is_playing(){
   int busyState = digitalRead(DFPLAYER_BUSY_PIN);
   if(busyState == LOW)
     return 1;
@@ -144,14 +189,26 @@ void play_something() {
   Serial.println("Playing File: 1");
   myDFPlayer.play(1);
 
-  // ledstrip
-  run_ledstrip_animation();
+  // ledstrip clear, +1
+  strip.clear();
+  strip.show();
+  run_ledstrip_animation_1();
+
+  while(sound_is_playing()){
+    doYIELD;
+    delay(1);
+  }
 
   // sound effect (Kabooom)
   myDFPlayer.stop();
   myDFPlayer.volume(30); // Volume 0-30
   Serial.println("Playing File: 2");
   myDFPlayer.play(2);
+
+  // ledstrip +2, clear
+  run_ledstrip_animation_2();
+  strip.clear();
+  strip.show();
 
   // done
   animation_is_running = 0;
@@ -164,10 +221,10 @@ void setup_led_strip(){
   strip.show();
 }
 
-void run_ledstrip_animation() {
+void run_ledstrip_animation_1() {
   // Sweep the spark from start to end (+ tail offset),
   // pos+=5 to PACE Fast! see also the delay(5)
-  for (int pos = 0; pos < NUM_LEDS + 10; pos+=3) {
+  for (int pos = LINE_START; pos < LINE_END + 10; pos+=3) {
     doYIELD;
     
     // 1. Clear the internal buffer instantly (uses fast memory clearing)
@@ -211,5 +268,53 @@ void run_ledstrip_animation() {
     
     // Optional: tiny delay if you want to pace it, or remove entirely for max speed
     // delay(5); 
+  }
+}
+
+void run_ledstrip_animation_2() {
+  for (int frame = 0; frame < 60; frame++) {
+    doYIELD;
+    strip.clear();
+
+    // The line is now burnt out / dark, but let's make the ring go wild
+    for (int rIdx = RING_START; rIdx <= RING_END; rIdx++) {
+      // Random erratic glowing across the 1m ring
+      int intensity = random(80, 255);
+      strip.setPixelColor(rIdx, strip.Color(intensity, intensity / 3, 0));
+    }
+
+    strip.show();
+    delay(5);
+  }
+}
+
+void setup_wtd(){
+  esp_err_t ok;
+
+  // First, deinitialize the Arduino core's WDT if it exists
+  esp_task_wdt_deinit();
+
+  // Now initialize with our custom config
+  esp_task_wdt_config_t wdt_config = {
+    .timeout_ms = WATCHDOG_TIMEOUT_MS,
+    .idle_core_mask = 0,
+    .trigger_panic = false,  // Set to false to allow custom handler to be called
+  };
+  ok = esp_task_wdt_init(&wdt_config);
+  if(ok != ESP_OK) {
+    Serial.print("Failed to initialize task watchdog: ");
+    Serial.println(esp_err_to_name(ok));
+    return;
+  }
+  Serial.println("[WDT] Task watchdog initialized");
+
+  // Register watchdog timeout callback
+  ok = esp_task_wdt_add_user((char*)"main", &wdt_user_handle);
+  if(ok != ESP_OK) {
+    Serial.print("[WDT] Failed to register task: ");
+    Serial.println(esp_err_to_name(ok));
+    return;
+  } else {
+    Serial.println("[WDT] Watchdog timeout callback registered successfully");
   }
 }
