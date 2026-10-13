@@ -1,20 +1,54 @@
-# Halloween Bang - Setup Guide
+# Halloween Bang - ESP32 Halloween Decoration
+
+A ESP32-based Halloween decoration with sound and LED effects. Can be triggered wirelessly (ESP-NOW) or locally (button press).
+
+## Two Operation Modes
+
+### BANGER Mode (default)
+- Receives "BANG" messages via ESP-NOW from other devices
+- Plays sound effects and LED animations when triggered wirelessly
+- Use: `EXTRA_FLAGS=-DBANGER DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy`
+
+### BUTTON Mode
+- Press physical button to send "BANG" messages via ESP-NOW
+- Can trigger other BANGER devices wirelessly
+- Use: `EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
 
 ## Build Commands
 
-### BANGER Mode (ESP-NOW wireless trigger)
 ```
+# BANGER mode (wireless trigger)
 EXTRA_FLAGS=-DBANGER DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy
-```
-- Firmware receives "BANG" messages via ESP-NOW
-- Plays sound effects and LED animations when triggered wirelessly
 
-### BUTTON Mode (local button trigger)
-```
+# BUTTON mode (local button)
 EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
 ```
-- Firmware sends "BANG" messages via ESP-NOW when button pressed
-- Can trigger other BANGER devices wirelessly
+
+## Audio Setup (MP3 for DFPlayer Mini)
+
+The DFPlayer Mini requires specific audio format. Convert your audio files using:
+
+```
+python convert_for_dfplayer.py input_file.mp3 output_file.mp3
+```
+
+or with custom output name:
+
+```
+python convert_for_dfplayer.py input_file.mp3 -o 0001.mp3
+```
+
+This converts to 44.1kHz, 192kbps constant bitrate MP3 compatible with the DFPlayer Mini.
+
+The firmware plays two sound effects:
+- **Sound 1**: Whooshing effect (file 0001.mp3)
+- **Sound 2**: Kaboom/explosion effect
+
+Both should be placed in the project directory and converted using the script above.
+
+## Development Notes
+
+- `setup_button_bang.py` - **This file can be removed**. It was originally for configuring a JDY-40 RF module, but that idea was disabled/removed from the project. The current firmware only uses ESP-NOW for wireless communication.
 
 ## Environment Variables
 - `MODULE` - Arduino project directory (default: halloween-bang)
@@ -24,7 +58,3 @@ EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
 - `DEV_BOARD_BAUDRATE` - Monitor baudrate (default: 460800)
 - `DEBUG` - Set to 1 to add -DDEBUG flag
 - `VERBOSE` - Set to any value to add -DVERBOSE flag
-
-## Operation Modes
-- **BANGER**: Receives "BANG" via ESP-NOW from other devices (including BUTTON mode devices)
-- **BUTTON**: Press physical button to send "BANG" via ESP-NOW
