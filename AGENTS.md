@@ -25,15 +25,6 @@ ESP32-based Halloween decoration with sound and LED effects. Can be triggered wi
 - FFmpeg-based audio transcoder
 - Converts to 44.1kHz, 192kbps MP3 for DFPlayer Mini
 
-### `setup_button_bang.py`
-- Sends AT commands to configure RF module
-- Sets baud, RFID, power, etc.
-
-### `build.sh`
-- Arduino CLI build system
-- Commands: build, update, upload, monitor, deploy, all
-- Pre-compiled binaries exist in `dist/`
-
 ### `partitions.csv`
 - ESP32 partition table (OTA, SPIFFS, NVS, storage)
 
