@@ -12,14 +12,15 @@
 #define SOUND_VOLUME        20
 #define SOUND_1             1
 #define SOUND_2             2
-#define DFPLAYER_BUSY_PIN   GPIO_NUM_7
-#define DFPLAYER_TX_PIN     GPIO_NUM_12
-#define DFPLAYER_RX_PIN     GPIO_NUM_13
+#define DFPLAYER_BUSY_PIN   GPIO_NUM_7  // on BANGER
+#define DFPLAYER_TX_PIN     GPIO_NUM_12 // on BANGER
+#define DFPLAYER_RX_PIN     GPIO_NUM_13 // on BANGER
 
-#define BUILTIN_LED         GPIO_NUM_21
-#define BUTTON_PIN          GPIO_NUM_8
-#define LED_12V_PIN         GPIO_NUM_5
-#define WAIT_TIME_BUTTON 5000  // configurable wait time (ms) for button mode - time of animation the banger is showing
+#define BUILTIN_LED         GPIO_NUM_21 // any, but not working
+#define BUTTON_PIN          GPIO_NUM_8  // on BUTTON
+#define LED_12V_PIN         GPIO_NUM_7  // on BUTTON
+
+#define WAIT_TIME_BUTTON    3000        // configurable wait time (ms) for button mode - time of animation the banger is showing
 
 #define doYIELD myYIELD()
 
@@ -217,12 +218,12 @@ void loop() {
   portENTER_CRITICAL(&r_mux);
   if(button_was_pressed){
       button_was_pressed = 0;
-      // Turn off 12V LED when button pressed
-      digitalWrite(LED_12V_PIN, LOW);
       do_send_bang = 1;
   }
   portEXIT_CRITICAL(&r_mux);
   if(do_send_bang){
+      // Turn off 12V LED when button pressed
+      digitalWrite(LED_12V_PIN, LOW);
       Serial.println("ADHD style sending BANG");
       char messaggio[] = "BANG";
       esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
@@ -233,7 +234,10 @@ void loop() {
         Serial.println("BANG sent!");
       }
       // debounce button + wait for animation time
+      delay(300);
       delay(WAIT_TIME_BUTTON);
+      digitalWrite(LED_12V_PIN, HIGH);
+      Serial.println("WAIT for BUTTON press, LAMP ON");
   } else {
     delay(5);
   }
