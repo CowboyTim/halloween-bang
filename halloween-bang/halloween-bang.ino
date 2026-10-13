@@ -58,7 +58,7 @@ uint8_t WHAT = IS_BANGER;
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
 #define NUM_LEDS                   300  // can be shorter
-EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812GRB);
+EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812RGB);
 
 HardwareSerial DFPLayerSerial(2);  // Use UART2
 DFRobotDFPlayerMini myDFPlayer;
