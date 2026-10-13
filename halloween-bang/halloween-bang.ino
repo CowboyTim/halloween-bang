@@ -56,6 +56,15 @@ void myYIELD(){
   }
 }
 
+uint8_t button_was_pressed = 0;
+portMUX_TYPE r_mux = portMUX_INITIALIZER_UNLOCKED;
+
+void IRAM_ATTR button_pressed() {
+  portENTER_CRITICAL_ISR(&r_mux);
+  button_was_pressed = 1;
+  portEXIT_CRITICAL_ISR(&r_mux);
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -125,6 +134,8 @@ void setup() {
   Serial.print("button INPUT_PULLUP PIN: ");
   Serial.println(BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
 
 #endif
 }
@@ -150,22 +161,29 @@ void loop() {
     }
   }
 #else
-  int buttonPressed = digitalRead(BUTTON_PIN);
-  if(buttonPressed == LOW){
-    Serial.println("ADHD style sending BANG");
-    char messaggio[] = "BANG";
-    esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
-    if(err != ESP_OK){
-      Serial.print("problem ESP-NOW send: ");
-      Serial.println(esp_err_to_name(err));
-    } else {
-      Serial.println("BANG sent!");
-    }
-    // debounce button
-    delay(500);
-  } else {
-    delay(1);
+  uint8_t do_send_bang = 0;
+  portENTER_CRITICAL(&r_mux);
+  if(button_was_pressed){
+      button_was_pressed = 0;
+      do_send_bang = 1;
   }
+  portEXIT_CRITICAL(&r_mux);
+  if(do_send_bang){
+      Serial.println("ADHD style sending BANG");
+      char messaggio[] = "BANG";
+      esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
+      if(err != ESP_OK){
+        Serial.print("problem ESP-NOW send: ");
+        Serial.println(esp_err_to_name(err));
+      } else {
+        Serial.println("BANG sent!");
+      }
+      // debounce button
+      delay(500);
+  } else {
+    delay(50);
+  }
+
 #endif
 }
 
@@ -192,8 +210,6 @@ void play_something() {
   myDFPlayer.play(1);
 
   // ledstrip clear, +1
-  strip.clear();
-  strip.show();
   run_ledstrip_animation_1();
 
   while(sound_is_playing()){
@@ -209,8 +225,6 @@ void play_something() {
 
   // ledstrip +2, clear
   run_ledstrip_animation_2();
-  strip.clear();
-  strip.show();
 
   // done
   animation_is_running = 0;
@@ -271,6 +285,8 @@ void run_ledstrip_animation_1() {
     // Optional: tiny delay if you want to pace it, or remove entirely for max speed
     // delay(5); 
   }
+  strip.clear();
+  strip.show();
 }
 
 void run_ledstrip_animation_2() {
@@ -288,6 +304,8 @@ void run_ledstrip_animation_2() {
     strip.show();
     delay(5);
   }
+  strip.clear();
+  strip.show();
 }
 
 void setup_wdt(){
