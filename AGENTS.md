@@ -40,3 +40,9 @@ ESP32-based Halloween decoration with sound and LED effects. Can be triggered wi
 - `BANGER` mode receives "BANG" messages via ESP-NOW from other devices
 - `BUTTON` mode sends "BANG" messages when button pressed
 - Both modes play sound effects and LED animations
+
+## Workflow Note
+- Do not immediately commit and push unless explicitly asked
+- Review all changes with `git status` and `git diff` first
+- Commit messages should be concise and match repo style
+- Only commit when ready; use `git add -p` for selective staging if needed
