@@ -38,6 +38,40 @@ uint8_t trigger_animation = 0;
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
+void setup_cpu_speed(uint32_t freq_mhz = 160) {
+  uint32_t xtal_f = getXtalFrequencyMhz();
+  uint32_t cpu_f = getCpuFrequencyMhz();
+  Serial.print("[ESP] Current CPU frequency: ");
+  Serial.print(cpu_f);
+  Serial.println(" MHz");
+  if(xtal_f != 0) {
+    Serial.print("[ESP] Detected XTAL frequency: ");
+    Serial.print(xtal_f);
+    Serial.println(" MHz");
+    if(xtal_f != 40) {
+      Serial.println("[ESP] Warning: Unusual XTAL frequency detected, expected 40 MHz");
+    } else {
+      if(xtal_f == 40) {
+        // 40 MHz XTAL, set CPU to 80, 160
+        // 40 MHz XTAL also allows 10, 20, 40 MHz CPU
+        cpu_f = freq_mhz;
+        Serial.print("[ESP] Setting CPU frequency to ");
+        Serial.print(cpu_f);
+        Serial.print("MHz for ");
+        Serial.print(xtal_f);
+        Serial.println("MHz XTAL");
+        setCpuFrequencyMhz(cpu_f);
+      }
+      cpu_f = getCpuFrequencyMhz();
+      Serial.print("[ESP] Current CPU frequency: ");
+      Serial.print(cpu_f);
+      Serial.println(" MHz");
+    }
+  } else {
+    Serial.println("[ESP] Failed to detect XTAL frequency, defaulting to 40 MHz");
+  }
+}
+
 void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
   if(strncmp((const char *)msg, "BANG", len) == 0) {
     trigger_animation = 1;
@@ -56,6 +90,7 @@ void myYIELD(){
   }
 }
 
+uint8_t printed_ready = 0;
 uint8_t button_was_pressed = 0;
 portMUX_TYPE r_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -137,6 +172,9 @@ void setup() {
   // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
 
+  // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
+  setup_cpu_speed(80);
+
 #endif
 }
 
@@ -146,6 +184,7 @@ void loop() {
 #if defined(BANGER)
   // BANGER just logs some info, the OnDataRecv handles the real thing
   if(trigger_animation == 1){
+    printed_ready = 0;
     trigger_animation = 0;
     Serial.println("received DEMOLITION request!");
     if(!animation_is_playing()){
@@ -158,6 +197,11 @@ void loop() {
     if(millis() - last_activity > 100){
       last_activity = millis();
       Serial.println("DFPlayer is playing (Busy)");
+    }
+  } else {
+    if(!printed_ready){
+      printed_ready = 1;
+      Serial.println("READY TO DEMOLISH");
     }
   }
 #else
@@ -181,7 +225,7 @@ void loop() {
       // debounce button
       delay(500);
   } else {
-    delay(50);
+    delay(5);
   }
 
 #endif
@@ -343,3 +387,4 @@ void esp_task_wdt_isr_user_handler(void){
   // esp_restart() is NOT ISR-safe and will trigger Interrupt WDT
   Serial.println("[WDT] 1 Task watchdog timeout occurred!");
 }
+
