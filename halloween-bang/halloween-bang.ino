@@ -52,8 +52,8 @@ uint8_t WHAT = IS_BANGER;
 #endif
 
 #define LINE_START    0
-#define LINE_END    111
-#define RING_START  112
+#define LINE_END    151
+#define RING_START  152
 #define RING_END    299
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
@@ -484,8 +484,8 @@ void run_ledstrip_animation_2() {
     doYIELD;
     strip.clear();
 
-    // Iterate across the ring LEDs surrounding the target (tail minus 40 LEDs)
-    for (int rIdx = RING_START; rIdx <= RING_END - 40; rIdx++) {
+    // Iterate across the ring LEDs surrounding the target
+    for (int rIdx = RING_START; rIdx <= RING_END; rIdx++) {
       // Create wild, erratic fire variations (deep reds, bright oranges, and sudden white-hot flare-ups)
       int flameColorType = random(0, 10);
       
