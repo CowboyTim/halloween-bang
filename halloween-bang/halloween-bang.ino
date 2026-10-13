@@ -19,6 +19,7 @@
 #define BUILTIN_LED         GPIO_NUM_21
 #define BUTTON_PIN          GPIO_NUM_8
 #define LED_12V_PIN         GPIO_NUM_5
+#define WAIT_TIME_BUTTON 5000  // configurable wait time (ms) for button mode - time of animation the banger is showing
 
 #define doYIELD myYIELD()
 
@@ -213,7 +214,6 @@ void loop() {
   }
 #else
   uint8_t do_send_bang = 0;
-  uint32_t wait_time = 5000; // configurable wait time (ms) = time of animation the banger is showing
   portENTER_CRITICAL(&r_mux);
   if(button_was_pressed){
       button_was_pressed = 0;
@@ -233,7 +233,7 @@ void loop() {
         Serial.println("BANG sent!");
       }
       // debounce button + wait for animation time
-      delay(wait_time);
+      delay(WAIT_TIME_BUTTON);
   } else {
     delay(5);
   }
