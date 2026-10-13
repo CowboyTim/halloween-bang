@@ -341,7 +341,12 @@ void do_button_loop(){
       }
       // debounce button + wait for animation time
       delay(300);
-      delay(WAIT_TIME_BUTTON);
+      // blink LED during wait time, like a buzzer being pushed
+      unsigned long wait_start = millis();
+      while (millis() - wait_start < WAIT_TIME_BUTTON) {
+        digitalWrite(LED_12V_PIN, !digitalRead(LED_12V_PIN));  // toggle LED
+        delay(50);  // 50ms toggle = ~60 blinks per 3s
+      }
       digitalWrite(LED_12V_PIN, HIGH);
       LOG("WAIT for BUTTON press, LAMP ON");
   } else {
