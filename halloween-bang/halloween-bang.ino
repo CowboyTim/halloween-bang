@@ -471,21 +471,38 @@ void run_ledstrip_animation_1() {
 }
 
 void run_ledstrip_animation_2() {
-  LOG("RUNNING Animation LED 2");
-  for (int frame = 0; frame < 60; frame++) {
+  LOG("RUNNING Animation LED 2: Inferno Ring");
+  
+  // Run for more frames or a slightly faster cadence to increase intensity
+  for (int frame = 0; frame < 80; frame++) {
     doYIELD;
     strip.clear();
 
-    // The line is now burnt out / dark, but let's make the ring go wild
+    // Iterate across the ring LEDs surrounding the target
     for (int rIdx = RING_START; rIdx <= RING_END; rIdx++) {
-      // Random erratic glowing across the 1m ring
-      int intensity = random(80, 255);
-      strip.setPixelColor(rIdx, strip.Color(intensity, intensity / 3, 0));
+      // Create wild, erratic fire variations (deep reds, bright oranges, and sudden white-hot flare-ups)
+      int flameColorType = random(0, 10);
+      
+      if (flameColorType < 3) {
+        // Sudden violent white-hot flare
+        strip.setPixelColor(rIdx, strip.Color(255, 255, 200));
+      } else if (flameColorType < 7) {
+        // Intense fiery orange/yellow
+        int intensity = random(150, 255);
+        strip.setPixelColor(rIdx, strip.Color(255, intensity / 2, 0));
+      } else {
+        // Deep glowing ember red
+        int redIntensity = random(100, 255);
+        strip.setPixelColor(rIdx, strip.Color(redIntensity, 10, 0));
+      }
     }
 
     strip.show();
-    delay(5);
+    
+    // Short delay to keep it blazing fast and frantic
+    delay(20); 
   }
+  
   strip.clear();
   strip.show();
   LOG("RUNNING Animation LED 2: DONE");
