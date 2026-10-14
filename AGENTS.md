@@ -9,6 +9,8 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - Never add a path where a missing message, a dead unit or a reboot can leave the BUTTON locked forever. The only open-ended lock is an explicit LOCK from the actor (`hold_lock`), released by ARM.
 - Sends are best effort, so each is repeated: BUTTON -> BANGER "BANG" `BANG_REPEATS` (3) times, KILLSWITCH ARM/LOCK `KILL_REPEATS` (3) times, 60 ms apart. The receiver acts on the first copy and ignores the rest: the BANGER clears `trigger_animation` after `play_something()` so copies that arrive during the show never start a second one.
 - The BANGER never depends on the killswitch; only "BANG" triggers the show.
+- The BANGER never depends on the DFPlayer either: the light show must run without sound. The ESP-NOW callback is registered first in `banger_setup()`; DFPlayer init is tried `DFPLAYER_INIT_TRIES` (3) times and BUSY must go HIGH within `DFPLAYER_BUSY_TIMEOUT_MS` (3 s), else `sound_ok` = 0 (lights only, `sound_is_playing()` returns 0). In the show every wait on BUSY is bounded (`SOUND_END_TIMEOUT_MS` 2 s after each animation, `BUILDUP_MAX_MS` in animation 1); hitting a bound also sets `sound_ok` = 0. BUSY uses `INPUT_PULLUP` so an unconnected wire reads "not playing". No idle re-init of the DFPlayer: reboot the BANGER to get sound back.
+- No wait loop may rely on the watchdog being fed inside it: `doYIELD` only yields, `wdt_feed()` runs once per `loop()` pass.
 - Re-check this principle (and the mock scenarios for it) whenever the state machine changes.
 
 ## Hardware Notes
@@ -25,7 +27,8 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
   - **BUTTON**: Non-blocking state machine. KILLSWITCH is optional: boots READY, `guarded`=0, back to READY after each show. The first LOCK sets `guarded` (also remembered during SHOW; forgotten on reboot); then LOCKED → (ARM) COUNTDOWN → (`ARM_DELAY_MS` 10 s + button released) READY → (press: unicast "BANG") SHOW → (`WAIT_TIME_BUTTON` 16 s) LOCKED (or COUNTDOWN if `AUTO_REARM_AFTER_SHOW 1`). After a show the lock is a cooldown: `COOLDOWN_AFTER_SHOW_MS` (30 s, 0 = off) later it goes READY by itself unless the actor sent LOCK (`hold_lock`, cleared by ARM). LOCK sends COUNTDOWN/READY to LOCKED; ARM is ignored in READY/SHOW. Lamp = PWM on `LED_12V_PIN` (GPIO 7), patterns in `lamp_level()`. Sends its state "S0".."S3" every `STATUS_PERIOD_MS`.
   - **KILLSWITCH** (optional): SuperMini, GPIO 8 button, GPIO 7 LED. Tap = "LOCK", hold `ARM_HOLD_MS` (1 s) = "ARM", both broadcast `KILL_REPEATS` (3) times. LED shows the BUTTON state (no link after `STATUS_TIMEOUT_MS`). Schematics: `docs/killswitch_schematic.svg`, `docs/system_overview.svg`.
 - Messages (block `MESSAGES BEGIN/END`, strict length+memcmp matching): "BANG", "ARM", "LOCK", "S0".."S3". CPU must run ≥80 MHz for ESP-NOW (`setup_cpu_speed(80)`).
-- The BUTTON/KILLSWITCH logic was only tested on a host mock, not compiled for the ESP32 yet. Countdown 8-segment display is planned, not implemented.
+- BANGER and BUTTON are built, flashed and verified working on the real boards (`EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER'` on /dev/ttyACM0, `'-ULOG_VERBOSE -DBUTTON'` on /dev/ttyACM1, `bash ./build.sh deploy`). KILLSWITCH is only tested on a host mock, not compiled/flashed yet. Countdown 8-segment display is planned, not implemented.
+- Serial logging needs `-DLOG_VERBOSE`; the `-DVERBOSE` that `build.sh` adds does nothing.
 - Controls 300 WS2812B LEDs (5 m, 60 LED/m) via `EdSoftLED` library
   - Fuse: `LINE_START`..`LINE_END` = LEDs 0-119 (2 m, starts at the audience/button)
   - Ring: `RING_START`..`RING_END` = LEDs 120-299 (closed circle, ~0.95 m across)
@@ -33,12 +36,12 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - DFRobot DFPlayer Mini for MP3 playback (`0001.mp3` fuse/ignition/build-up, `0002.mp3` kaboom)
 - ESP-NOW wireless communication
 - Schematics are SVG in `docs/` (`system_overview`, `banger_schematic`, `button_schematic`, `killswitch_schematic`); dashed boxes mean optional/planned. Keep them in sync when pins, parts or states change.
-- Watchdog timer (60s timeout)
+- Watchdog timer (60s timeout), fed only from `loop()` (`wdt_feed()`). Note `trigger_panic = false` and the ISR handler only logs, so a timeout does not reset the board yet.
 - LED animations (block between `ANIMATIONS BEGIN/END`, tuned with `#define`s: `FUSE_BURN_MS`, `FAKEOUT_*`, `RING_IGNITE_MS`, `BUILDUP_MIN_MS`, `KABOOM_*`):
   - `run_ledstrip_animation_1()`: fuse spark with fake-out → ring ignites both ways → white-hot build-up. Does not clear at the end; it waits until sound 1 finishes.
   - `run_ledstrip_animation_2()`: white flash + shockwave, embers, purple ghost wisp, then clear. Also drives the strobe LED via `strobe_update(ms)`: 1.5 s burst at ~9 Hz starting 150 ms in (`STROBE_START_MS`, `STROBE_DURATION_MS`, `STROBE_PERIOD_MS`, `STROBE_ON_MS`; `STROBE_ENABLED 0` disables it). The strobe pin is forced LOW again when the animation ends.
 - Strobe LED: `STROBE_PIN` = GPIO 5 (BANGER) → trigger input of an AOD4184A ("D4184") MOSFET trigger module (or the gate of a logic-level N-MOSFET with 100-220 ohm series and 10 kohm pull-down), strobe LED on its own 12 V supply with shared GND (3x 3 W 9-11 V COB chips, each with its own ~6.8-10 ohm series resistor, ~0.9 A total). GPIO 5 is a "safe" pin on the S3 Zero; GPIO 4 strip, 7 BUSY, 8 button, 12/13 DFPlayer are taken.
-- Show flow (`play_something()`): play sound 1 + animation 1 → wait for BUSY pin low→high → play sound 2 + animation 2 → wait for sound end. About 14.5 s in total.
+- Show flow (`play_something()`): play sound 1 + animation 1 → wait for BUSY pin low→high (max `SOUND_END_TIMEOUT_MS`) → play sound 2 + animation 2 → wait for sound end (same bound). About 14.5 s in total; without a DFPlayer (`sound_ok` = 0) the sounds are skipped and the animations run on their own timers (~14.1 s).
 
 ### `EdSoftLED.h/cpp` - LED strip driver
 - Supports WS2812 and SK6812 strips
@@ -71,7 +74,7 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - Bootloader and partitions binaries
 
 ## Operation
-- Two modes: `BANGER` (wireless trigger) or `BUTTON` (local button)
+- Three modes: `BANGER` (wireless trigger), `BUTTON` (local button), optional `KILLSWITCH` (actor's arm/lock)
 - `BANGER` mode receives "BANG" messages via ESP-NOW from other devices
 - `BUTTON` mode sends "BANG" messages when button pressed. Presses made while the lamp blinks (during the show) are discarded: after `WAIT_TIME_BUTTON` the code waits for the button to be released, debounces, and clears the queued interrupt flag (`button_was_pressed`) before the lamp comes back on.
 - Both modes play sound effects and LED animations

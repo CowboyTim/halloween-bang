@@ -36,6 +36,12 @@
 #define DFPLAYER_TX_PIN     GPIO_NUM_12 // on BANGER
 #define DFPLAYER_RX_PIN     GPIO_NUM_13 // on BANGER
 
+// The light show must run without the DFPlayer (not wired, no SD card, BUSY stuck LOW):
+// boot gives up on it after these limits and the show then runs on its own timers.
+#define DFPLAYER_INIT_TRIES       3     // begin() attempts at boot (each takes ~2-3 s)
+#define DFPLAYER_BUSY_TIMEOUT_MS  3000  // boot: BUSY must go HIGH (idle) within this time
+#define SOUND_END_TIMEOUT_MS      2000  // show: wait at most this long for a sound to end after its animation
+
 #define BUILTIN_LED         GPIO_NUM_21 // any, but not working
 #define BUTTON_PIN          GPIO_NUM_8  // on BUTTON
 #define LED_12V_PIN         GPIO_NUM_7  // on BUTTON
@@ -72,6 +78,7 @@ DFRobotDFPlayerMini myDFPlayer;
 
 uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
+uint8_t sound_ok = 0;              // BANGER: 1 = DFPlayer found and BUSY works, 0 = lights only
 unsigned long last_activity = 0;
 uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
 
@@ -221,9 +228,13 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
 }
 // ==== MESSAGES END ====
 
+// only yields; the watchdog is fed once per loop() pass (wdt_feed), so a wait that never
+// ends inside a function is not hidden from it
 void myYIELD(){
   yield();
-  // Reset the watchdog timer
+}
+
+void wdt_feed(){
   if(wdt_user_handle != NULL){
       esp_err_t ok = esp_task_wdt_reset_user(wdt_user_handle);
       if(ok != ESP_OK) {
@@ -550,6 +561,9 @@ void do_killswitch_loop(){
 // ==== BUTTON / KILLSWITCH END ====
 
 void banger_setup(){
+  // first, so a BANG is never missed whatever happens with the DFPlayer below
+  esp_now_register_recv_cb(OnDataRecv);
+
 #if STROBE_ENABLED
   // strobe LED off from the start (the 10k pull-down keeps it off while the ESP32 boots)
   pinMode(STROBE_PIN, OUTPUT);
@@ -567,20 +581,36 @@ void banger_setup(){
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   LOG("DFPlayer Mini WAIT 2");
   delay(1000);
+  // pull-up: an unconnected BUSY wire reads HIGH = "not playing"
+  pinMode(DFPLAYER_BUSY_PIN, INPUT_PULLUP);
+
   LOG("DFPlayer Mini setup START");
-  while(!myDFPlayer.begin(DFPLayerSerial, true, true)){
+  uint8_t ok = 0;
+  for(uint8_t i = 0; i < DFPLAYER_INIT_TRIES && !ok; i++){
     doYIELD;
-    LOG("DFPlayer Mini not detected!");
-    delay(500);
+    ok = myDFPlayer.begin(DFPLayerSerial, true, true);
+    if(!ok){
+      LOG("DFPlayer Mini not detected (try %d/%d)", i + 1, DFPLAYER_INIT_TRIES);
+      delay(500);
+    }
   }
-  doYIELD;
-  LOG("DFPlayer Mini ready!");
-  LOG("Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
-  pinMode(DFPLAYER_BUSY_PIN, INPUT);
-  while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
-    doYIELD;
-    LOG("DFPlayer BUSY pin still LOW, waiting");
-    delay(100);
+  if(ok){
+    LOG("DFPlayer Mini ready! Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
+    uint32_t t0 = millis();
+    while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
+      if(millis() - t0 >= DFPLAYER_BUSY_TIMEOUT_MS){
+        LOG("DFPlayer BUSY pin stuck LOW");
+        ok = 0;
+        break;
+      }
+      doYIELD;
+      delay(100);
+    }
+  }
+  sound_ok = ok;
+  if(!sound_ok){
+    LOG("DFPlayer not working: light show only, no sound");
+    return;
   }
   LOG("DFPlayer BUSY HIGH, continue");
   myDFPlayer.volume(10);
@@ -588,9 +618,6 @@ void banger_setup(){
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
   myDFPlayer.enableDAC();
   LOG("DFPlayer setup complete");
-
-  // for BANGER: just a callback
-  esp_now_register_recv_cb(OnDataRecv);
 }
 
 void setup() {
@@ -651,6 +678,7 @@ void do_banger_loop(){
 }
 
 void loop() {
+  wdt_feed();
   doYIELD;
   if(WHAT == IS_BANGER){
       do_banger_loop();
@@ -670,10 +698,37 @@ uint8_t animation_is_playing() {
 }
 
 uint8_t sound_is_playing(){
+  if(!sound_ok)
+    return 0;
   int busyState = digitalRead(DFPLAYER_BUSY_PIN);
   if(busyState == LOW)
     return 1;
   return 0;
+}
+
+// wait for the sound to end, but never longer than SOUND_END_TIMEOUT_MS: a BUSY pin that
+// stays LOW means the DFPlayer is broken, so the next shows run without sound
+void wait_sound_end(uint8_t n){
+  uint32_t t0 = millis();
+  while(sound_is_playing()){
+    if(millis() - t0 >= SOUND_END_TIMEOUT_MS){
+      LOG("sound %d did not end (BUSY stuck LOW?): light show only from now on", n);
+      sound_ok = 0;
+      break;
+    }
+    doYIELD;
+    delay(1);
+  }
+}
+
+void play_sound(uint8_t n){
+  if(!sound_ok){
+    LOG("no DFPlayer, skipping File: %d", n);
+    return;
+  }
+  myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
+  LOG("Playing File: %d", n);
+  myDFPlayer.play(n);
 }
 
 void play_something() {
@@ -681,31 +736,20 @@ void play_something() {
   last_activity = millis();
 
   // sound effect 1 (Whooosh)
-  myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
-  LOG("Playing File: 1");
-  myDFPlayer.play(SOUND_1);
+  play_sound(SOUND_1);
 
   // ledstrip clear, +1
   run_ledstrip_animation_1();
-
-  while(sound_is_playing()){
-    doYIELD;
-    delay(1);
-  }
+  wait_sound_end(SOUND_1);
 
   // sound effect (Kabooom)
-  myDFPlayer.stop();
-  myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
-  LOG("Playing File: 2");
-  myDFPlayer.play(SOUND_2);
+  if(sound_ok)
+    myDFPlayer.stop();
+  play_sound(SOUND_2);
 
   // ledstrip +2, clear
   run_ledstrip_animation_2();
-
-  while(sound_is_playing()){
-    doYIELD;
-    delay(1);
-  }
+  wait_sound_end(SOUND_2);
 
   // done
   LOG("done showing demolition animation");
@@ -883,7 +927,11 @@ void run_ledstrip_animation_1() {
     strip.show();
 
     if (ms >= buildDone && !sound_is_playing()) break;
-    if (ms >= buildDone + BUILDUP_MAX_MS) break;      // safety net
+    if (ms >= buildDone + BUILDUP_MAX_MS) {           // safety net: BUSY stuck LOW, stop trusting it
+      LOG("sound 1 did not end: light show only from now on");
+      sound_ok = 0;
+      break;
+    }
     delay(2);
   }
   LOG("RUNNING Animation LED 1: DONE");

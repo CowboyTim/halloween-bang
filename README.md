@@ -4,12 +4,14 @@ A ESP32-based Halloween show with sound and LED effects. Can be triggered wirele
 
 The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a **ring of fire** on the floor, where a (bad) vampire stands. The fuse fizzles, nearly dies, re-ignites, the ring catches fire and builds up to a white-hot **KABOOM** - and the vampire vanishes in the flash. A purple ghost wisp drifts back along the fuse afterwards.
 
-## Two Operation Modes
+## Three Operation Modes
 
 ### BANGER Mode (default)
 - Receives "BANG" messages via ESP-NOW from other devices
 - Plays sound effects and LED animations when triggered wirelessly
-- Use: `EXTRA_FLAGS=-DBANGER DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy`
+- Without a working DFPlayer (not wired, no SD card, BUSY pin stuck) it still plays the full light show and strobe, just silent. Boot gives up on the DFPlayer after 3 tries (about 10 s); reboot the BANGER to get sound back after fixing it
+- Use: `EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER' DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy`
+- Status: built, flashed and working on the real board
 
 ### BUTTON Mode
 - Press physical button to send "BANG" messages via ESP-NOW
@@ -19,7 +21,8 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it. After every show it is LOCKED again (so nobody presses twice), but only as a **cooldown**: `COOLDOWN_AFTER_SHOW_MS` (30 s) later it unlocks by itself, so a lost ARM never leaves it dead. A LOCK from the actor (also during the show) holds it locked until the next ARM. A power cycle of the BUTTON unit forgets the guard.
 - The arcade button lamp is a 12 V LED with a 470 ohm series resistor inside (about 20 mA), driven low-side by a 2N2222 on GPIO 7; see `docs/button_schematic.svg`
 - Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
-- Use: `EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
+- Use: `EXTRA_FLAGS='-ULOG_VERBOSE -DBUTTON' DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
+- Status: built, flashed and working on the real board together with the BANGER
 
 ### KILLSWITCH Mode (optional)
 - A small ESP32-S3 SuperMini with one push button and one status LED, carried by the actor
@@ -31,20 +34,22 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
 - Use: `EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy`
 - Power: the KILLSWITCH runs fine from a USB power bank, or from a LiPo on the board's `B+` / `B-` pads (see "Battery power" below)
-- Status: logic tested on a PC mock only, not yet compiled/flashed on the real boards. The countdown display on the BUTTON is planned for later.
+- Status: logic tested on a PC mock only, not yet compiled/flashed on a real board (the BUTTON side is). The countdown display on the BUTTON is planned for later.
 
 ## Build Commands
 
 ```
 # BANGER mode (wireless trigger)
-EXTRA_FLAGS=-DBANGER DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy
+EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER' DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy
 
 # BUTTON mode (local button)
-EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
+EXTRA_FLAGS='-ULOG_VERBOSE -DBUTTON' DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
 
-# KILLSWITCH mode (actor's arm/lock button)
-EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy
+# KILLSWITCH mode (actor's arm/lock button, not tested on hardware yet)
+EXTRA_FLAGS='-ULOG_VERBOSE -DKILLSWITCH' DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy
 ```
+
+Serial logging is off unless `LOG_VERBOSE` is defined: use `-DLOG_VERBOSE` instead of `-ULOG_VERBOSE` to see the `LOG()` output (`bash ./build.sh monitor`). The `-DVERBOSE` that `build.sh` adds does not switch it on.
 
 ## Schematics (docs/)
 
