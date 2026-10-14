@@ -357,6 +357,19 @@ void do_button_loop(){
       digitalWrite(LED_12V_PIN, HIGH);
       // debounce button + wait for animation time
       delay(300);
+      // The interrupt kept running during the wait above, so presses made while the show was
+      // playing are still queued in button_was_pressed. Throw them away, else a kid who pushed
+      // during the show starts a second one the moment the lamp lights up again.
+      // If the button is still held down, wait for the release first (release bounce can
+      // otherwise cause a fake press), then debounce and clear the queued press.
+      while (digitalRead(BUTTON_PIN) == LOW) {
+        doYIELD;
+        delay(10);
+      }
+      delay(50);
+      portENTER_CRITICAL(&r_mux);
+      button_was_pressed = 0;
+      portEXIT_CRITICAL(&r_mux);
       LOG("WAIT for BUTTON press, LAMP ON");
   } else {
     delay(5);

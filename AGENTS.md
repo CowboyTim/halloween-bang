@@ -55,7 +55,7 @@ ESP32-based Halloween show with sound and LED effects: an ACME-style cartoon fus
 ## Operation
 - Two modes: `BANGER` (wireless trigger) or `BUTTON` (local button)
 - `BANGER` mode receives "BANG" messages via ESP-NOW from other devices
-- `BUTTON` mode sends "BANG" messages when button pressed
+- `BUTTON` mode sends "BANG" messages when button pressed. Presses made while the lamp blinks (during the show) are discarded: after `WAIT_TIME_BUTTON` the code waits for the button to be released, debounces, and clears the queued interrupt flag (`button_was_pressed`) before the lamp comes back on.
 - Both modes play sound effects and LED animations
 - `WAIT_TIME_BUTTON` (16 s) must stay longer than the whole show (~14.5 s) so the button lamp only lights again when the show is over. Re-check it whenever animation or sound lengths change.
 
