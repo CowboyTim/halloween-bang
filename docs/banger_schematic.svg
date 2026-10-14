@@ -59,7 +59,9 @@
   <polyline points="500,380 420,380" fill="none" stroke="#2e7d32" stroke-width="4"/>
   <rect x="360" y="366" width="60" height="28" fill="#fff" stroke="#2e7d32" stroke-width="3"/>
   <line x1="360" y1="380" x2="300" y2="380" stroke="#2e7d32" stroke-width="4"/>
-  <text x="390" y="358" font-size="13" font-weight="bold" fill="#1b5e20" text-anchor="middle">1 kohm</text>
+  <rect x="345" y="332" width="90" height="72" rx="6" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="390" y="344" font-size="10" font-weight="bold" fill="#777" text-anchor="middle">OPTIONAL</text>
+  <text x="390" y="360" font-size="13" font-weight="bold" fill="#1b5e20" text-anchor="middle">1 kohm</text>
   <circle cx="300" cy="430" r="5" fill="#6a1b9a"/>
   <line x1="300" y1="430" x2="500" y2="430" stroke="#6a1b9a" stroke-width="4"/>
   <circle cx="300" cy="480" r="5" fill="#ef6c00"/>
@@ -86,7 +88,7 @@
   <line x1="850" y1="320" x2="900" y2="320" stroke="#00838f" stroke-width="4"/>
   <circle cx="900" cy="320" r="5" fill="#00838f"/>
   <text x="820" y="298" font-size="13" font-weight="bold" fill="#006064" text-anchor="middle">330 ohm</text>
-  <text x="820" y="352" font-size="11" fill="#444" text-anchor="middle">(300-470)</text>
+  <text x="820" y="352" font-size="11" fill="#444" text-anchor="middle">(300-470), at the strip</text>
   <circle cx="1100" cy="270" r="5" fill="#c62828"/><line x1="1100" y1="270" x2="1100" y2="190" stroke="#c62828" stroke-width="4"/><circle cx="1100" cy="190" r="5" fill="#c62828"/>
   <text x="1112" y="288" font-size="12" font-weight="bold" fill="#c62828">5V</text>
   <circle cx="1150" cy="380" r="5" fill="#111"/>
@@ -94,16 +96,17 @@
   <circle cx="1270" cy="940" r="5" fill="#111"/>
   <text x="1138" y="398" font-size="12" font-weight="bold" fill="#111" text-anchor="end">GND</text>
 
-  <!-- optional capacitor -->
-  <rect x="1165" y="215" width="90" height="140" rx="8" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
-  <line x1="1210" y1="190" x2="1210" y2="262" stroke="#777" stroke-width="3" stroke-dasharray="6 4"/>
+  <!-- capacitor across the strip supply (needed) -->
+  <line x1="1210" y1="190" x2="1210" y2="262" stroke="#c62828" stroke-width="4"/>
   <line x1="1190" y1="262" x2="1230" y2="262" stroke="#444" stroke-width="4"/>
-  <line x1="1190" y1="276" x2="1230" y2="276" stroke="#444" stroke-width="4"/>
-  <line x1="1210" y1="276" x2="1210" y2="380" stroke="#777" stroke-width="3" stroke-dasharray="6 4"/>
+  <path d="M1190,276 Q1210,268 1230,276" fill="none" stroke="#444" stroke-width="4"/>
+  <text x="1238" y="260" font-size="14" font-weight="bold" fill="#c62828">+</text>
+  <line x1="1210" y1="274" x2="1210" y2="380" stroke="#111" stroke-width="4"/>
   <circle cx="1210" cy="190" r="4" fill="#c62828"/><circle cx="1210" cy="380" r="4" fill="#111"/>
-  <text x="1210" y="320" font-size="11" fill="#555" text-anchor="middle">1000 uF</text>
-  <text x="1210" y="334" font-size="11" fill="#555" text-anchor="middle">recommended</text>
-  <text x="1210" y="232" font-size="10" font-weight="bold" fill="#777" text-anchor="middle">OPTIONAL</text>
+  <text x="1200" y="210" font-size="12" font-weight="bold" fill="#333" text-anchor="end">1000 uF</text>
+  <text x="1200" y="224" font-size="11" fill="#444" text-anchor="end">10-16 V rated</text>
+  <text x="1200" y="238" font-size="11" fill="#444" text-anchor="end">+ to 5 V</text>
+  <text x="1200" y="252" font-size="11" fill="#444" text-anchor="end">at strip start</text>
 
   <!-- optional second injection -->
   <rect x="900" y="430" width="250" height="56" rx="8" fill="#fafafa" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
@@ -172,7 +175,7 @@
   <rect x="30" y="965" width="1240" height="80" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <rect x="46" y="979" width="46" height="24" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
   <text x="104" y="996" font-size="13" fill="#333">dashed = optional part.</text>
-  <text x="300" y="996" font-size="13" fill="#333">Serial: ESP TX (GPIO 12) goes to the DFPlayer RX through 1 kohm, DFPlayer TX goes to ESP RX (GPIO 13). The 1 kohm is a recommended safety.</text>
+  <text x="300" y="996" font-size="13" fill="#333">Serial: ESP TX (GPIO 12) goes to the DFPlayer RX through 1 kohm, DFPlayer TX goes to ESP RX (GPIO 13). The 1 kohm is optional (can reduce hiss).</text>
   <text x="46" y="1020" font-size="13" fill="#333">The strobe supply shares GND with the ESP32 and nothing else. Aim the strobe at the ring or smoke, never at people's eyes (flashes at 8-10 Hz).</text>
   <text x="46" y="1038" font-size="12" fill="#555">Strobe alternative without the module: a logic-level N-MOSFET (IRLZ44N): GPIO 5, then 100-220 ohm to the gate, 10 kohm gate to GND, source to GND, drain to LED -.</text>
 </svg>
