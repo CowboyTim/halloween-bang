@@ -42,10 +42,19 @@ Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the sta
 
 ## Strobe LED (BANGER)
 
-A 5-10 W cool-white (6000-6500 K) LED module (COB or a short dense 12 V strip, behind a diffuser) is switched by a logic-level N-MOSFET (IRLZ44N, IRLB8721 or AO3400; not an IRF520 module, it does not switch fully at 3.3 V):
+A 5-10 W cool-white (6000-6500 K) LED module (COB or a short dense 12 V strip, behind a diffuser) is switched on its negative side by a MOSFET. Chosen switch: a ready-made **"D4184" MOSFET trigger module** (8-pack from Amazon, sold as "DC MOSFET Modules 5V-36V 400W 15A ... Dual Driver PWM"). The chips marked D4184 are AOS AOD4184(A), 40 V / 50 A N-channel, two in parallel on one output; trigger input 3.3-20 V (PWM up to 20 kHz), load supply 5-36 V. Despite "dual" it is one switched output per board, and the listing's "IRLZ44N" is just keyword stuffing. Do **not** confuse it with the ON Semi "D4184", a P-channel MOSFET + Schottky part that does not fit this circuit.
 
+Wiring with the module (follow the silkscreen on the board; the seller pages do not name the terminals):
+- ESP32 `GPIO 5` (`STROBE_PIN`) → module trigger/signal input, ESP32 GND → module trigger GND (shared with the 12 V supply GND)
+- 12 V adapter → module supply input; LED branches (with their resistors, see below) → module output terminals
+- Before wiring the LEDs: unpowered, measure continuity between the + input and + output terminals. About 0 ohm means the + side passes straight through and the - side is switched, which is what this circuit needs. Then power the module with the ESP32 unplugged and check the output stays off; if it flickers on, add a 10 kohm resistor from the trigger input to GND.
+- At 0.9 A the module is nowhere near its limits. Sellers warn a 3.3-5 V pin may not fully open the gate at the full 15 A rating, which does not matter here.
+
+Alternative without the module: a logic-level N-MOSFET (IRLZ44N, IRLB8721 or AO3400; not an IRF520 module, it does not switch fully at 3.3 V):
 - ESP32 `GPIO 5` (`STROBE_PIN`) → 100-220 ohm → MOSFET gate, plus a 10 kohm pull-down from gate to GND (keeps the strobe off while the ESP32 boots)
 - MOSFET source → GND, MOSFET drain → LED minus, LED plus → 12 V (through a series resistor for bare COB chips, see below)
+
+LED choice:
 - Suggested part choice (not yet tested on the real build): 3 of the 10-pack 3 W COB chips (DC 9-11 V, 300 mA, 6500 K white, ~9 W total, ~0.9 A from the 12 V supply). Bare chips need a **series resistor per chip** (start with 10 ohm, 2 W; measure the current with a multimeter and go down to ~6.8 ohm if it is below ~250 mA), three such branches in parallel on the MOSFET drain. Mount them on aluminium or a heatsink and put a diffuser in front. Do not run all 10 (~36 W).
 - Power the strobe from its **own 12 V supply** (a 15 W adapter is plenty) and only tie its GND to the ESP32 GND. Do not run it from the 5 V USB charger: a 5 V / 2 A charger is already close to its limit during the KABOOM flash and a pulsed 1 A load would risk resets and DFPlayer noise.
 - Aim the strobe at the ring or the smoke, not at people's eyes. Flashes at 8-10 Hz are in the photosensitive-epilepsy range, so keep the burst short and put up a warning sign.
