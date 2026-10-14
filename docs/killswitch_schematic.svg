@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900" width="1100" height="900" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
+  <rect width="1100" height="900" fill="#ffffff"/>
+
+  <text x="30" y="44" font-size="26" font-weight="bold" fill="#1b1b1b">KILLSWITCH unit - ESP32-S3 SuperMini</text>
+  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Uses the same two pins as the BUTTON unit: GPIO 8 = push button, GPIO 7 = status LED.</text>
+
+  <!-- ===== power: USB power bank ===== -->
+  <rect x="790" y="94" width="270" height="86" rx="10" fill="#fff0f0" stroke="#c62828" stroke-width="2.5"/>
+  <text x="925" y="126" font-size="17" font-weight="bold" fill="#c62828" text-anchor="middle">USB power bank</text>
+  <text x="925" y="148" font-size="13" fill="#444" text-anchor="middle">5 V, in the actor's pocket</text>
+  <text x="925" y="166" font-size="12" fill="#777" text-anchor="middle">(check it does not switch off at low current)</text>
+  <line x1="790" y1="124" x2="590" y2="124" stroke="#c62828" stroke-width="4"/>
+  <text x="690" y="114" font-size="12" fill="#c62828" text-anchor="middle">USB-C cable</text>
+  <text x="925" y="204" font-size="12" fill="#555" text-anchor="middle">or a 3.7 V LiPo on the board's B+ / B- pads, if your</text>
+  <text x="925" y="220" font-size="12" fill="#555" text-anchor="middle">board has them (check the polarity first!)</text>
+
+  <!-- ===== MCU ===== -->
+  <rect x="420" y="110" width="170" height="28" rx="4" fill="#cfd8dc" stroke="#455a64" stroke-width="2"/>
+  <text x="505" y="129" font-size="12" fill="#37474f" text-anchor="middle">USB-C</text>
+  <rect x="380" y="138" width="250" height="420" rx="12" fill="#e8f0fe" stroke="#1a237e" stroke-width="3"/>
+  <text x="505" y="196" font-size="20" font-weight="bold" fill="#1a237e" text-anchor="middle">ESP32-S3</text>
+  <text x="505" y="220" font-size="20" font-weight="bold" fill="#1a237e" text-anchor="middle">SuperMini</text>
+  <text x="505" y="262" font-size="13" fill="#444" text-anchor="middle">ESP-NOW (Wi-Fi) to the</text>
+  <text x="505" y="280" font-size="13" fill="#444" text-anchor="middle">BUTTON unit, broadcast</text>
+  <text x="505" y="324" font-size="12" fill="#777" text-anchor="middle">Pin positions are simplified,</text>
+  <text x="505" y="341" font-size="12" fill="#777" text-anchor="middle">see esp32s3_supermini_pinout.png</text>
+
+  <!-- MCU pins -->
+  <circle cx="380" cy="470" r="6" fill="#2e7d32"/>
+  <text x="394" y="475" font-size="14" font-weight="bold" fill="#1b5e20">GPIO 7</text>
+  <circle cx="630" cy="470" r="6" fill="#1565c0"/>
+  <text x="616" y="475" font-size="14" font-weight="bold" fill="#0d47a1" text-anchor="end">GPIO 8</text>
+  <circle cx="630" cy="190" r="6" fill="#111"/>
+  <text x="616" y="195" font-size="14" font-weight="bold" fill="#111" text-anchor="end">GND</text>
+
+  <!-- ===== GND rail ===== -->
+  <line x1="160" y1="700" x2="900" y2="700" stroke="#111" stroke-width="4"/>
+  <line x1="530" y1="700" x2="530" y2="722" stroke="#111" stroke-width="4"/>
+  <line x1="508" y1="722" x2="552" y2="722" stroke="#111" stroke-width="4"/>
+  <line x1="516" y1="732" x2="544" y2="732" stroke="#111" stroke-width="4"/>
+  <line x1="524" y1="742" x2="536" y2="742" stroke="#111" stroke-width="4"/>
+  <text x="575" y="737" font-size="14" font-weight="bold" fill="#111">GND</text>
+
+  <!-- MCU GND pin -> rail -->
+  <polyline points="630,190 760,190 760,700" fill="none" stroke="#111" stroke-width="4"/>
+  <circle cx="760" cy="700" r="6" fill="#111"/>
+
+  <!-- ===== LED branch (left): GPIO 7 -> 330R -> LED -> GND ===== -->
+  <polyline points="380,470 330,470" fill="none" stroke="#2e7d32" stroke-width="4"/>
+  <rect x="250" y="456" width="80" height="28" fill="#fff" stroke="#2e7d32" stroke-width="3"/>
+  <text x="290" y="446" font-size="15" font-weight="bold" fill="#1b5e20" text-anchor="middle">330 ohm</text>
+  <polyline points="250,470 200,470 200,540" fill="none" stroke="#2e7d32" stroke-width="4"/>
+  <!-- LED symbol, anode on top -->
+  <polygon points="178,540 222,540 200,580" fill="#c8e6c9" stroke="#2e7d32" stroke-width="3"/>
+  <line x1="178" y1="580" x2="222" y2="580" stroke="#2e7d32" stroke-width="4"/>
+  <line x1="200" y1="580" x2="200" y2="700" stroke="#111" stroke-width="4"/>
+  <circle cx="200" cy="700" r="6" fill="#111"/>
+  <line x1="232" y1="548" x2="256" y2="526" stroke="#2e7d32" stroke-width="2.5"/>
+  <polygon points="256,526 245,528 254,537" fill="#2e7d32"/>
+  <line x1="240" y1="566" x2="264" y2="544" stroke="#2e7d32" stroke-width="2.5"/>
+  <polygon points="264,544 253,546 262,555" fill="#2e7d32"/>
+  <text x="232" y="624" font-size="14" font-weight="bold" fill="#1b5e20">status LED</text>
+  <text x="232" y="642" font-size="12" fill="#444">any colour, about 5 mA</text>
+  <text x="232" y="658" font-size="12" fill="#444">long leg (anode) to the resistor</text>
+
+  <!-- ===== Button branch (right): GPIO 8 -> switch -> GND ===== -->
+  <polyline points="630,470 840,470 840,540" fill="none" stroke="#1565c0" stroke-width="4"/>
+  <circle cx="840" cy="540" r="6" fill="#fff" stroke="#1565c0" stroke-width="3"/>
+  <circle cx="840" cy="610" r="6" fill="#fff" stroke="#1565c0" stroke-width="3"/>
+  <line x1="840" y1="610" x2="816" y2="548" stroke="#1565c0" stroke-width="4"/>
+  <line x1="816" y1="548" x2="816" y2="522" stroke="#1565c0" stroke-width="3" stroke-dasharray="5 4"/>
+  <line x1="800" y1="522" x2="832" y2="522" stroke="#1565c0" stroke-width="4"/>
+  <line x1="840" y1="616" x2="840" y2="700" stroke="#111" stroke-width="4"/>
+  <circle cx="840" cy="700" r="6" fill="#111"/>
+  <text x="870" y="556" font-size="14" font-weight="bold" fill="#0d47a1">push button</text>
+  <text x="870" y="574" font-size="12" fill="#444">momentary, normally open</text>
+  <text x="870" y="592" font-size="12" fill="#444">(any size, e.g. a small one</text>
+  <text x="870" y="608" font-size="12" fill="#444">or a foot switch)</text>
+  <text x="620" y="505" font-size="12" fill="#444" text-anchor="end">no resistor needed:</text>
+  <text x="620" y="521" font-size="12" fill="#444" text-anchor="end">the firmware turns on the</text>
+  <text x="620" y="537" font-size="12" fill="#444" text-anchor="end">internal pull-up (INPUT_PULLUP)</text>
+
+  <!-- ===== how it behaves ===== -->
+  <rect x="30" y="780" width="1040" height="100" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
+  <text x="48" y="806" font-size="14" font-weight="bold" fill="#222">Use</text>
+  <text x="48" y="826" font-size="13" fill="#333">Tap = LOCK (locks the BUTTON at once, an accidental tap can never arm it).  Hold 1 second = ARM (starts the 10 s countdown on the BUTTON).</text>
+  <text x="48" y="850" font-size="14" font-weight="bold" fill="#222">LED</text>
+  <text x="48" y="870" font-size="13" fill="#333">lit while you hold the button.  Then: 2 quick blinks = no link,  1 blink / 2 s = locked,  4 blinks / s = countdown,  solid = READY,  fast flicker = show running.</text>
+</svg>

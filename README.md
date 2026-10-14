@@ -14,8 +14,19 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 ### BUTTON Mode
 - Press physical button to send "BANG" messages via ESP-NOW
 - Can trigger other BANGER devices wirelessly
-- The button lamp blinks for `WAIT_TIME_BUTTON` (16 s) while the show runs, then lights up again
+- Boots **LOCKED** (lamp dark, presses are thrown away) and only works after the KILLSWITCH arms it
+- Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s), then LOCKED again
 - Use: `EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
+
+### KILLSWITCH Mode
+- A small ESP32-S3 SuperMini with one push button and one status LED, carried by the actor
+- **Tap = LOCK** (BUTTON locks immediately), **hold 1 s = ARM** (BUTTON goes COUNTDOWN, after `ARM_DELAY_MS` = 10 s and a released button it is READY)
+- ARM/LOCK are broadcast (no MAC needed) and sent 3x; the BUTTON reports its state (`S0`..`S3`) every second, so the LED shows: 2 quick blinks = no link, 1 blink/2 s = locked, 4 blinks/s = countdown, solid = ready, fast flicker = show
+- Fail-safe: any lost message, empty battery or reboot ends in LOCKED
+- Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
+- Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
+- Use: `EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy`
+- Status: logic tested on a PC mock only, not yet compiled/flashed on the real boards. The countdown display on the BUTTON is planned for later.
 
 ## Build Commands
 
@@ -25,6 +36,9 @@ EXTRA_FLAGS=-DBANGER DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy
 
 # BUTTON mode (local button)
 EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
+
+# KILLSWITCH mode (actor's arm/lock button)
+EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy
 ```
 
 ## LED Strip Layout
@@ -112,6 +126,7 @@ This converts to 44.1kHz, 192kbps constant bitrate MP3 compatible with the DFPla
 
 ### Board GPIO Pinouts
 - **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 12/13 (DFPlayer TX/RX), GPIO 7 (BUSY pin), GPIO 21 (builtin LED), GPIO 8 (button input pullup)
+- **KILLSWITCH mode**: **ESP32 S3 SuperMini** - GPIO 8 button, GPIO 7 status LED
 - **BUTTON mode**: Requires **ESP32 S3 SuperMini** - same GPIO assignments for button input and ESP-NOW communication
 
 ### Why these boards?
