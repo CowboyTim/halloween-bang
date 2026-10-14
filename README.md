@@ -40,6 +40,17 @@ The fuse enters the ring at LED 120 and LED 299 sits right next to it (keep a no
 
 Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, and a 300-470 ohm resistor on the data line.
 
+## Strobe LED (BANGER)
+
+A 5-10 W cool-white (6000-6500 K) LED module (COB or a short dense 12 V strip, behind a diffuser) is switched by a logic-level N-MOSFET (IRLZ44N, IRLB8721 or AO3400; not an IRF520 module, it does not switch fully at 3.3 V):
+
+- ESP32 `GPIO 5` (`STROBE_PIN`) → 100-220 ohm → MOSFET gate, plus a 10 kohm pull-down from gate to GND (keeps the strobe off while the ESP32 boots)
+- MOSFET source → GND, MOSFET drain → LED minus, LED plus → 12 V
+- Power the strobe from its **own 12 V supply** (a 15 W adapter is plenty) and only tie its GND to the ESP32 GND. Do not run it from the 5 V USB charger: a 5 V / 2 A charger is already close to its limit during the KABOOM flash and a pulsed 1 A load would risk resets and DFPlayer noise.
+- Aim the strobe at the ring or the smoke, not at people's eyes. Flashes at 8-10 Hz are in the photosensitive-epilepsy range, so keep the burst short and put up a warning sign.
+
+Rough 5 V budget (WS2812B ~60 mA per LED at full white, scaled by brightness): at `setBrightness(10)` the white-hot ring is about 0.4 A; at 40 it is about 1.7 A. With the ESP32, DFPlayer and speaker, a 2 A charger is fine up to roughly brightness 20; above that use a 5 V / 4 A supply.
+
 ## Animations
 
 Both animations are in `halloween-bang.ino` between `ANIMATIONS BEGIN/END`. Everything is tunable with the `#define`s at the top of that block (`FUSE_BURN_MS`, `FAKEOUT_*`, `RING_IGNITE_MS`, `BUILDUP_MIN_MS`, `KABOOM_*`).
@@ -52,8 +63,9 @@ Both animations are in `halloween-bang.ino` between `ANIMATIONS BEGIN/END`. Ever
 
 **Animation 2 (during sound 2, ~3.8 s)**
 1. **KABOOM:** white flash on the ring (the vampire disappears here) and a shockwave racing back down the fuse.
-2. **Cool down:** fireball fades through orange to dying embers.
-3. **Ghost wisp:** a purple wisp drifts back along the fuse, then everything goes dark.
+2. **Strobe burst (150-1650 ms):** a separate white strobe LED flashes about 9 times per second (40 ms on) over the slide-whistle vanish, so the vampire can step out between flashes (`STROBE_ENABLED 0` disables it).
+3. **Cool down:** fireball fades through orange to dying embers.
+4. **Ghost wisp:** a purple wisp drifts back along the fuse, then everything goes dark.
 
 Total show length is about 14.5 s (10.3 s + 4.0 s, plus DFPlayer start latency).
 

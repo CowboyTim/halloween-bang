@@ -56,6 +56,9 @@ uint8_t WHAT = IS_BANGER;
 #define RING_START  120
 #define RING_END    299
 
+#define STROBE_ENABLED      1           // 1 = white strobe LED flashes during the KABOOM, 0 = off (timing: see ANIMATIONS block)
+#define STROBE_PIN          GPIO_NUM_5  // on BANGER: gate of the logic-level N-MOSFET that switches the strobe LED (100-220R in series, 10k pull-down to GND)
+
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
 #define NUM_LEDS                   300  // can be shorter
 EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812GRB);
@@ -232,6 +235,12 @@ void button_setup(){
 }
 
 void banger_setup(){
+#if STROBE_ENABLED
+  // strobe LED off from the start (the 10k pull-down keeps it off while the ESP32 boots)
+  pinMode(STROBE_PIN, OUTPUT);
+  digitalWrite(STROBE_PIN, LOW);
+#endif
+
   // Fancy led strip
   setup_led_strip();
 
@@ -443,6 +452,14 @@ void setup_led_strip(){
 #define KABOOM_FIRE_MS    600     // flash + fireball fade
 #define KABOOM_TOTAL_MS   3800    // whole KABOOM animation incl. embers + purple ghost wisp
 
+// Strobe burst during the KABOOM (STROBE_ENABLED / STROBE_PIN are defined with the pins at the top).
+// Runs over the slide-whistle "vanish" of 0002.mp3: the vampire steps out between the flashes.
+// Keep it a short burst: flashes at 8-10 Hz are in the photosensitive-epilepsy range -> put up a warning sign.
+#define STROBE_START_MS     150   // after the first white flash
+#define STROBE_DURATION_MS  1500  // length of the burst
+#define STROBE_PERIOD_MS    110   // ~9 flashes per second
+#define STROBE_ON_MS        40    // on-time per flash (short = crisp)
+
 // -------------------------------------------------------------------------
 //  Helpers
 // -------------------------------------------------------------------------
@@ -586,6 +603,14 @@ void run_ledstrip_animation_1() {
 //  Animation 2 (during SOUND_2): KABOOM flash + shockwave down the fuse,
 //  fading fireball, dying embers, purple ghost wisp drifting back along the fuse.
 // -------------------------------------------------------------------------
+void strobe_update(uint32_t ms) {
+#if STROBE_ENABLED
+  bool on = ms >= STROBE_START_MS && ms < STROBE_START_MS + STROBE_DURATION_MS
+         && ((ms - STROBE_START_MS) % STROBE_PERIOD_MS) < STROBE_ON_MS;
+  digitalWrite(STROBE_PIN, on ? HIGH : LOW);
+#endif
+}
+
 void run_ledstrip_animation_2() {
   LOG("RUNNING Animation LED 2: KABOOM");
   uint32_t t0 = millis();
@@ -594,6 +619,7 @@ void run_ledstrip_animation_2() {
     doYIELD;
     uint32_t ms = millis() - t0;
     if (ms >= KABOOM_TOTAL_MS) break;
+    strobe_update(ms);
     strip.clear();
 
     if (ms < KABOOM_FIRE_MS) {
@@ -638,6 +664,7 @@ void run_ledstrip_animation_2() {
     delay(2);
   }
 
+  strobe_update(KABOOM_TOTAL_MS);   // outside the burst window -> strobe off
   strip.clear();
   strip.show();
   LOG("RUNNING Animation LED 2: DONE");

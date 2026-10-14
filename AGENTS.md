@@ -18,7 +18,8 @@ ESP32-based Halloween show with sound and LED effects: an ACME-style cartoon fus
 - Watchdog timer (60s timeout)
 - LED animations (block between `ANIMATIONS BEGIN/END`, tuned with `#define`s: `FUSE_BURN_MS`, `FAKEOUT_*`, `RING_IGNITE_MS`, `BUILDUP_MIN_MS`, `KABOOM_*`):
   - `run_ledstrip_animation_1()`: fuse spark with fake-out → ring ignites both ways → white-hot build-up. Does not clear at the end; it waits until sound 1 finishes.
-  - `run_ledstrip_animation_2()`: white flash + shockwave, embers, purple ghost wisp, then clear.
+  - `run_ledstrip_animation_2()`: white flash + shockwave, embers, purple ghost wisp, then clear. Also drives the strobe LED via `strobe_update(ms)`: 1.5 s burst at ~9 Hz starting 150 ms in (`STROBE_START_MS`, `STROBE_DURATION_MS`, `STROBE_PERIOD_MS`, `STROBE_ON_MS`; `STROBE_ENABLED 0` disables it). The strobe pin is forced LOW again when the animation ends.
+- Strobe LED: `STROBE_PIN` = GPIO 5 (BANGER) → gate of a logic-level N-MOSFET (100-220 ohm series, 10 kohm pull-down), strobe LED on its own 12 V supply with shared GND. GPIO 5 is a "safe" pin on the S3 Zero; GPIO 4 strip, 7 BUSY, 8 button, 12/13 DFPlayer are taken.
 - Show flow (`play_something()`): play sound 1 + animation 1 → wait for BUSY pin low→high → play sound 2 + animation 2 → wait for sound end. About 14.5 s in total.
 
 ### `EdSoftLED.h/cpp` - LED strip driver
