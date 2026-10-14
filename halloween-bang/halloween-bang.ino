@@ -260,6 +260,9 @@ void IRAM_ATTR button_pressed() {
 //    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY          (not guarded)
 //    LOCK (from anywhere, also during SHOW) -> guarded; READY / COUNTDOWN -> LOCKED
 //    guarded: LOCKED --ARM--> COUNTDOWN --(ARM_DELAY_MS)--> READY --press--> SHOW --> LOCKED
+//    after a show the lock is only a cooldown: COOLDOWN_AFTER_SHOW_MS later (30 s) the button
+//    is READY again by itself, so a lost ARM never leaves it dead. A LOCK from the actor
+//    (during or after the show) holds the button locked until the next ARM instead.
 //    Presses in any state except READY are thrown away.
 //
 //  KILLSWITCH unit: ONE push button. Hold it ARM_HOLD_MS = ARM, a short tap = LOCK (so an
@@ -267,6 +270,7 @@ void IRAM_ATTR button_pressed() {
 // -------------------------------------------------------------------------
 
 #define ARM_DELAY_MS           10000   // after ARM: this long until the button works (0 = at once)
+#define COOLDOWN_AFTER_SHOW_MS 30000   // guarded: this long after a show the button unlocks by itself (an ARM may have been lost; 0 = stay locked until ARM)
 #define AUTO_REARM_AFTER_SHOW  0       // 1 = a new countdown starts by itself after each show, 0 = stay locked until re-armed
 
 // BUTTON lamp (12 V via the 2N2222 on LED_12V_PIN, PWM)
@@ -317,6 +321,7 @@ uint8_t lamp_level(uint8_t state, uint32_t ms) {
 
 // ---- BUTTON unit ---------------------------------------------------------
 uint8_t  bstate            = BS_READY;   // works out of the box; a KILLSWITCH LOCK guards it
+uint8_t  hold_lock         = 0;          // 1 = the actor locked it: no automatic unlock, only ARM
 uint8_t  guarded           = 0;          // 1 after the first LOCK: needs ARM before every show
 uint32_t bstate_since      = 0;
 uint32_t button_high_since = 0;     // millis() since the button was last seen released (0 = pressed now)
@@ -385,11 +390,21 @@ void do_button_loop(){
   }
   bool released = button_high_since && (now - button_high_since >= 50);
 
-  if (lock && !guarded) { guarded = 1; LOG("BUTTON now guarded by the KILLSWITCH"); }
+  if (lock) {
+    if (!guarded) LOG("BUTTON now guarded by the KILLSWITCH");
+    guarded   = 1;
+    hold_lock = 1;     // an explicit LOCK holds until the actor ARMs
+  }
 
   switch (bstate) {
     case BS_LOCKED:
-      if (arm) button_set_state(BS_COUNTDOWN);
+      if (arm) {
+        hold_lock = 0;
+        button_set_state(BS_COUNTDOWN);
+      } else if (!hold_lock && COOLDOWN_AFTER_SHOW_MS && now - bstate_since >= COOLDOWN_AFTER_SHOW_MS) {
+        LOG("cooldown over, unlocking by itself");
+        button_set_state(BS_READY);
+      }
       break;
     case BS_COUNTDOWN:
       if (lock) {
@@ -421,7 +436,7 @@ void do_button_loop(){
       // the show runs on the BANGER; this is just a timer (ARM is ignored meanwhile, a LOCK is remembered)
       if (now - bstate_since >= WAIT_TIME_BUTTON) {
         if (!guarded)                button_set_state(BS_READY);
-        else if (AUTO_REARM_AFTER_SHOW) button_set_state(BS_COUNTDOWN);
+        else if (AUTO_REARM_AFTER_SHOW && !hold_lock) button_set_state(BS_COUNTDOWN);
         else                         button_set_state(BS_LOCKED);
       }
       break;

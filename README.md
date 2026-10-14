@@ -15,7 +15,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Press physical button to send "BANG" messages via ESP-NOW
 - Can trigger other BANGER devices wirelessly
 - Works on its own: boots **READY** and is READY again after every show (no KILLSWITCH needed)
-- Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it, and LOCKED again after every show. A power cycle of the BUTTON unit forgets the guard.
+- Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it. After every show it is LOCKED again (so nobody presses twice), but only as a **cooldown**: `COOLDOWN_AFTER_SHOW_MS` (30 s) later it unlocks by itself, so a lost ARM never leaves it dead. A LOCK from the actor (also during the show) holds it locked until the next ARM. A power cycle of the BUTTON unit forgets the guard.
 - Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
 - Use: `EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
 

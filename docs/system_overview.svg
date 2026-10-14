@@ -100,7 +100,7 @@
   <!-- SHOW back to LOCKED (long way round, below) -->
   <polyline points="1160,642 1160,720 155,720 155,642" fill="none" stroke="#222" stroke-width="3.5" marker-end="url(#arr)"/>
   <text x="665" y="686" font-size="12" font-weight="bold" fill="#222" text-anchor="middle">after the show: 16 s (WAIT_TIME_BUTTON)</text>
-  <text x="665" y="704" font-size="11" fill="#222" text-anchor="middle">guarded: LOCKED (or COUNTDOWN, AUTO_REARM)</text>
+  <text x="665" y="704" font-size="11" fill="#222" text-anchor="middle">guarded: LOCKED, READY by itself after 30 s</text>
 
   <!-- not guarded: SHOW back to READY -->
   <polyline points="1100,642 1100,670 880,670 880,642" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arr)"/>
@@ -114,7 +114,7 @@
 
   <!-- notes -->
   <rect x="40" y="860" width="1220" height="90" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
-  <text x="58" y="888" font-size="13" fill="#333">The first LOCK guards the button. ARM during the show is ignored, a LOCK during the show is remembered. Power cycle of the BUTTON = unguarded again.</text>
+  <text x="58" y="888" font-size="13" fill="#333">The first LOCK guards the button. ARM during the show is ignored, LOCK is remembered. After a show the lock lasts 30 s (a lost ARM cannot strand it); actor LOCK holds.</text>
   <text x="58" y="912" font-size="13" fill="#333">Each ARM / LOCK is sent 3 times (broadcast has no retries). The BUTTON reports its state every second: check the killswitch LED (solid = READY) after pressing.</text>
   <text x="58" y="936" font-size="13" fill="#333">Countdown display on the button: planned for a later step (the code already has the COUNTDOWN state and its timer).</text>
 </svg>
