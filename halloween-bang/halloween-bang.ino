@@ -116,44 +116,54 @@ const char * PT(const char *tformat) {
   return (const char *)&T_buffer;
 }
 
+// Logging goes to the S3's USB serial (HWCDC) in the normal build. Its write() blocks up to
+// ~2 s per call when the PC is plugged in but nothing reads (monitor closed), which stalls
+// the show. So: no TX wait (setTxTimeoutMs(0) in setup()), a bigger TX buffer for bursts, one
+// write per line, and a line that does not fit is dropped whole. LOG() never blocks.
+#if ARDUINO_USB_CDC_ON_BOOT && ARDUINO_USB_MODE && UART_LOG_DEV_UART0 == 0
+ #define LOG_USB_HWCDC  1
+ #define LOG_TX_BUFFER  2048
+#else
+ #define LOG_USB_HWCDC  0
+#endif
+
 NOINLINE
-void LOGPRINT(const char *buf){
-    // For native USB CDC, check if a host is connected (if supported), 
-    // or ensure we don't block indefinitely if the buffer is full.
-    #if ARDUINO_USB_CDC_ON_BOOT
-      // If CDC is enabled, check if DTR is set (terminal is open) 
-      // or write with a timeout so it never freezes the CPU.
-      if (!Serial) return; // Skip logging entirely if nobody is listening!
-    #endif
-    if(!verbose)
+void LOGPRINT(const char *buf, size_t len){
+    if(!verbose || len == 0)
         return;
-    UART0.write(buf, strlen(buf));
+    #if ARDUINO_USB_CDC_ON_BOOT
+      if (!Serial) return; // no USB host (e.g. power bank): skip logging
+    #endif
+    #if LOG_USB_HWCDC
+      if (Serial.availableForWrite() < (int)len) return; // PC not reading: drop the line
+    #endif
+    UART0.write((const uint8_t *)buf, len);
 }
 
 NOINLINE
 void do_vprintf(uint8_t t, const char *tf, const char *_fmt, va_list args) {
-  ALIGN(4) static char obuf[256] = {0};
+  // timestamp + text + newline in one buffer, written in one go
+  ALIGN(4) static char obuf[320] = {0};
   if(_fmt == NULL && tf == NULL)
     return;
-  if((t & 2) && tf != NULL)
-    LOGPRINT(PT(tf));
-  if(_fmt == NULL)
-    return;
-  static int s = 0;
-  s = vsnprintf(obuf, sizeof(obuf), _fmt, args);
-  if(s < 0)
-    obuf[0] = 0;
-  else if(s >= sizeof(obuf))
-    obuf[sizeof(obuf) - 1] = 0;
-  else
-    obuf[s] = 0;
-
-  if(t & 1) {
-    LOGPRINT(obuf);
-    LOGPRINT("\n");
-  } else {
-    LOGPRINT(obuf);
+  size_t n = 0;
+  if((t & 2) && tf != NULL) {
+    n = strlcpy(obuf, PT(tf), sizeof(obuf));
+    if(n >= sizeof(obuf))
+      n = sizeof(obuf) - 1;
   }
+  if(_fmt != NULL) {
+    int s = vsnprintf(obuf + n, sizeof(obuf) - n, _fmt, args);
+    if(s > 0)
+      n += ((size_t)s < sizeof(obuf) - 1 - n) ? (size_t)s : sizeof(obuf) - 1 - n;
+    if(t & 1) {
+      if(n > sizeof(obuf) - 2)
+        n = sizeof(obuf) - 2;
+      obuf[n++] = '\n';
+    }
+  }
+  obuf[n] = 0;
+  LOGPRINT(obuf, n);
 }
 
 NOINLINE
@@ -621,7 +631,13 @@ void banger_setup(){
 }
 
 void setup() {
+#if LOG_USB_HWCDC
+  Serial.setTxBufferSize(LOG_TX_BUFFER);  // room for the boot burst of log lines
+#endif
   UART0.begin(115200);
+#if LOG_USB_HWCDC
+  Serial.setTxTimeoutMs(0);               // never wait for the PC to read (see LOGPRINT)
+#endif
 
   setup_wdt();
 

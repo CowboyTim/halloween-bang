@@ -91,3 +91,4 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - `LOG()` automatically prepends timestamps in `[HH:MM:SS][info]:` format
 - Converts multiple `Serial.print` calls into a single `LOG()` call with variadic arguments
 - Example: `LOG("Button pressed on pin %d", BUTTON_PIN)` replaces `Serial.print("Button pressed on pin: "); Serial.println(BUTTON_PIN)`
+- `LOG()` never blocks: on the USB serial (HWCDC) build `setup()` sets `setTxTimeoutMs(0)` and a 2 KB TX buffer (`LOG_TX_BUFFER`), each line is one write, and a line that does not fit is dropped whole (PC plugged in but no monitor reading). Without this, HWCDC `write()` waits up to ~2 s per call and stalls the show. No USB host (power bank) = logging skipped.
