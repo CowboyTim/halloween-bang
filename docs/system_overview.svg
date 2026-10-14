@@ -13,7 +13,7 @@
   <text x="40" y="72" font-size="14" fill="#555">All three talk over ESP-NOW. The KILLSWITCH is optional: without it the BUTTON simply works. ARM, LOCK and the state reports are broadcast (no extra MAC addresses).</text>
 
   <!-- ===== units ===== -->
-  <rect x="40" y="100" width="300" height="230" rx="12" fill="#fff4e6" stroke="#e8590c" stroke-width="3"/>
+  <rect x="40" y="100" width="300" height="230" rx="12" fill="#fff4e6" stroke="#e8590c" stroke-width="3" stroke-dasharray="14 8"/>
   <text x="190" y="136" font-size="22" font-weight="bold" fill="#d9480f" text-anchor="middle">KILLSWITCH</text>
   <text x="190" y="158" font-size="13" fill="#555" text-anchor="middle">OPTIONAL  -  the actor  -  -DKILLSWITCH</text>
   <text x="190" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 SuperMini</text>
@@ -36,15 +36,15 @@
   <text x="1110" y="158" font-size="13" fill="#555" text-anchor="middle">the ring  -  build flag -DBANGER</text>
   <text x="1110" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 Zero</text>
   <text x="1110" y="224" font-size="14" fill="#333" text-anchor="middle">300 WS2812B LEDs + DFPlayer</text>
-  <text x="1110" y="248" font-size="14" fill="#333" text-anchor="middle">strobe via MOSFET module (12 V)</text>
+  <text x="1110" y="248" font-size="14" fill="#333" text-anchor="middle">+ optional strobe (12 V)</text>
   <text x="1110" y="284" font-size="14" font-weight="bold" fill="#1864ab" text-anchor="middle">plays the show on "BANG"</text>
 
   <!-- ===== messages ===== -->
-  <line x1="342" y1="170" x2="498" y2="170" stroke="#222" stroke-width="3.5" marker-end="url(#arr)"/>
+  <line x1="342" y1="170" x2="498" y2="170" stroke="#222" stroke-width="3.5" stroke-dasharray="10 6" marker-end="url(#arr)"/>
   <text x="420" y="152" font-size="15" font-weight="bold" fill="#222" text-anchor="middle">ARM / LOCK</text>
   <text x="420" y="192" font-size="12" fill="#555" text-anchor="middle">broadcast, sent 3x</text>
 
-  <line x1="498" y1="266" x2="342" y2="266" stroke="#c62828" stroke-width="3.5" marker-end="url(#arrr)"/>
+  <line x1="498" y1="266" x2="342" y2="266" stroke="#c62828" stroke-width="3.5" stroke-dasharray="10 6" marker-end="url(#arrr)"/>
   <text x="420" y="248" font-size="15" font-weight="bold" fill="#c62828" text-anchor="middle">S0 .. S3</text>
   <text x="420" y="288" font-size="12" fill="#555" text-anchor="middle">its state, every second</text>
 
@@ -116,5 +116,5 @@
   <rect x="40" y="860" width="1220" height="90" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <text x="58" y="888" font-size="13" fill="#333">The first LOCK guards the button. ARM during the show is ignored, LOCK is remembered. After a show the lock lasts 30 s (a lost ARM cannot strand it); actor LOCK holds.</text>
   <text x="58" y="912" font-size="13" fill="#333">Each ARM / LOCK is sent 3 times (broadcast has no retries). The BUTTON reports its state every second: check the killswitch LED (solid = READY) after pressing.</text>
-  <text x="58" y="936" font-size="13" fill="#333">Countdown display on the button: planned for a later step (the code already has the COUNTDOWN state and its timer).</text>
+  <text x="58" y="936" font-size="13" fill="#333">Dashed = optional. Countdown display on the button: planned for a later step (the code already has the COUNTDOWN state and its timer).</text>
 </svg>

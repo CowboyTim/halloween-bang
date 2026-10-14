@@ -26,6 +26,7 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
   - Ring size is changed only via `LINE_END` / `RING_START`; all animation maths derives from them
 - DFRobot DFPlayer Mini for MP3 playback (`0001.mp3` fuse/ignition/build-up, `0002.mp3` kaboom)
 - ESP-NOW wireless communication
+- Schematics are SVG in `docs/` (`system_overview`, `banger_schematic`, `button_schematic`, `killswitch_schematic`); dashed boxes mean optional/planned. Keep them in sync when pins, parts or states change.
 - Watchdog timer (60s timeout)
 - LED animations (block between `ANIMATIONS BEGIN/END`, tuned with `#define`s: `FUSE_BURN_MS`, `FAKEOUT_*`, `RING_IGNITE_MS`, `BUILDUP_MIN_MS`, `KABOOM_*`):
   - `run_ledstrip_animation_1()`: fuse spark with fake-out → ring ignites both ways → white-hot build-up. Does not clear at the end; it waits until sound 1 finishes.

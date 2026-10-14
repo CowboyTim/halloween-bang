@@ -1,8 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900" width="1100" height="900" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
   <rect width="1100" height="900" fill="#ffffff"/>
 
-  <text x="30" y="44" font-size="26" font-weight="bold" fill="#1b1b1b">KILLSWITCH unit - ESP32-S3 SuperMini</text>
-  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Uses the same two pins as the BUTTON unit: GPIO 8 = push button, GPIO 7 = status LED.</text>
+  <text x="30" y="44" font-size="26" font-weight="bold" fill="#1b1b1b">KILLSWITCH unit (optional) - ESP32-S3 SuperMini</text>
+  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Dashed = optional. Uses the same two pins as the BUTTON unit: GPIO 8 = push button, GPIO 7 = status LED.</text>
+
+  <!-- whole unit is optional -->
+  <rect x="14" y="84" width="1072" height="684" rx="14" fill="none" stroke="#777" stroke-width="3" stroke-dasharray="14 8"/>
+  <text x="30" y="106" font-size="12" font-weight="bold" fill="#777">OPTIONAL UNIT: the BUTTON and BANGER work without it</text>
 
   <!-- ===== power: USB power bank ===== -->
   <rect x="790" y="94" width="270" height="86" rx="10" fill="#fff0f0" stroke="#c62828" stroke-width="2.5"/>

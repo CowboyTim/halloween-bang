@@ -44,6 +44,17 @@ EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
 EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy
 ```
 
+## Schematics (docs/)
+
+SVG, editable, up to date. Dashed boxes are optional or planned parts.
+
+| File | Shows |
+|------|-------|
+| `docs/system_overview.svg` | the three units, the messages between them, the BUTTON states |
+| `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
+| `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button (redrawn from `button_schema.jpeg`) |
+| `docs/killswitch_schematic.svg` | KILLSWITCH (optional): SuperMini, push button, status LED |
+
 ## LED Strip Layout
 
 One 5 m WS2812B strip (60 LED/m = 300 LEDs) on GPIO 4, cut logically in two parts (see the `LINE_*` / `RING_*` defines in `halloween-bang.ino`):
@@ -55,7 +66,7 @@ One 5 m WS2812B strip (60 LED/m = 300 LEDs) on GPIO 4, cut logically in two part
 
 The fuse enters the ring at LED 120 and LED 299 sits right next to it (keep a normal LED pitch at that joint). Put that joint on the audience side: the fire races around both arms and meets behind the vampire. To change the ring size, only change `LINE_END` and `RING_START`; everything else is computed from them.
 
-Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, and a 300-470 ohm resistor on the data line.
+Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and ideally a 1000 uF capacitor across 5 V / GND at the strip start (drawn as optional in `docs/banger_schematic.svg`).
 
 ## Strobe LED (BANGER)
 
