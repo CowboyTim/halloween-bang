@@ -62,10 +62,20 @@
   <!-- ===== arcade button ===== -->
   <rect x="900" y="110" width="260" height="480" rx="14" fill="#ffcdd2" stroke="#c62828" stroke-width="4"/>
   <text x="1030" y="136" font-size="15" font-weight="bold" fill="#b71c1c" text-anchor="middle">100 mm arcade button</text>
-  <rect x="915" y="150" width="230" height="110" rx="8" fill="#ef9a9a" stroke="#c62828" stroke-width="2.5"/>
-  <text x="1030" y="174" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">12 V lamp (LED)</text>
-  <text x="926" y="206" font-size="13" font-weight="bold" fill="#333">LED +</text>
-  <text x="926" y="246" font-size="13" font-weight="bold" fill="#333">LED -</text>
+  <rect x="915" y="150" width="230" height="140" rx="8" fill="#ef9a9a" stroke="#c62828" stroke-width="2.5"/>
+  <text x="1030" y="168" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">12 V lamp = LED + 470 ohm</text>
+  <text x="906" y="193" font-size="14" font-weight="bold" fill="#333">+</text>
+  <text x="906" y="233" font-size="14" font-weight="bold" fill="#333">-</text>
+  <!-- inside the lamp: 470 ohm in series with the LED -->
+  <line x1="900" y1="200" x2="935" y2="200" stroke="#333" stroke-width="3"/>
+  <rect x="935" y="187" width="60" height="26" fill="#fff" stroke="#333" stroke-width="3"/>
+  <text x="965" y="230" font-size="12" font-weight="bold" fill="#333" text-anchor="middle">470 ohm</text>
+  <polyline points="995,200 1040,200 1040,208" fill="none" stroke="#333" stroke-width="3"/>
+  <polygon points="1028,208 1052,208 1040,230" fill="#fff59d" stroke="#333" stroke-width="3"/>
+  <line x1="1028" y1="230" x2="1052" y2="230" stroke="#333" stroke-width="3"/>
+  <polyline points="1040,230 1040,240 900,240" fill="none" stroke="#333" stroke-width="3"/>
+  <text x="1066" y="224" font-size="12" font-weight="bold" fill="#333">LED</text>
+  <text x="1030" y="272" font-size="11" fill="#333" text-anchor="middle">inside the button, about 20 mA at 12 V</text>
   <rect x="915" y="380" width="230" height="190" rx="8" fill="#ef9a9a" stroke="#c62828" stroke-width="2.5"/>
   <text x="1030" y="404" font-size="14" font-weight="bold" fill="#333" text-anchor="middle">microswitch</text>
   <text x="926" y="456" font-size="13" font-weight="bold" fill="#333">NO</text>
@@ -110,5 +120,5 @@
   <rect x="30" y="800" width="1140" height="64" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <rect x="46" y="812" width="40" height="20" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
   <text x="98" y="827" font-size="13" fill="#333">dashed = optional / planned.   Button: INPUT_PULLUP, so the switch goes to GND with no resistor.</text>
-  <text x="46" y="852" font-size="13" fill="#333">Lamp: GPIO 7 drives the 2N2222 base (1 kohm), the 2N2222 pulls LED - to GND, LED + is on the 12 V from the MT3608. Brightness is PWM (breathing, flicker).</text>
+  <text x="46" y="852" font-size="13" fill="#333">Lamp: GPIO 7, 1 kohm, 2N2222 base. The 2N2222 pulls the lamp - to GND, lamp + is on the 12 V from the MT3608 (the lamp is LED + 470 ohm inside).</text>
 </svg>
