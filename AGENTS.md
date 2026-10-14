@@ -3,6 +3,13 @@
 ## Overview
 ESP32-based Halloween show with sound and LED effects: an ACME-style cartoon fuse burns along an LED strip into a ring of fire (a person stands in it), builds up and goes KABOOM. Can be triggered wirelessly (ESP-NOW) or locally (button).
 
+## Design Principle: availability beats protection
+The show must always work. The killswitch/guard is a convenience for the actor, never a requirement for the show to run. If a kid presses the button too early and the show starts, that is acceptable. A show that does not run because of a connectivity problem (lost ARM, dead killswitch, flat battery, reboot) is not. So when designing or changing BUTTON/KILLSWITCH logic:
+- Every failure must end in the button working, not in it staying locked: the BUTTON works without any killswitch (boots READY), and a guarded lock is only a cooldown (`COOLDOWN_AFTER_SHOW_MS`, 30 s) that expires by itself.
+- Never add a path where a missing message, a dead unit or a reboot can leave the BUTTON locked forever. The only open-ended lock is an explicit LOCK from the actor (`hold_lock`), released by ARM.
+- The BANGER never depends on the killswitch; only "BANG" triggers the show.
+- Re-check this principle (and the mock scenarios for it) whenever the state machine changes.
+
 ## Key Files
 
 ### `halloween-bang/halloween-bang.ino` (main firmware)
