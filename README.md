@@ -30,6 +30,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
 - Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
 - Use: `EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy`
+- Power: the KILLSWITCH runs fine from a USB power bank, or from a LiPo on the board's `B+` / `B-` pads (see "Battery power" below)
 - Status: logic tested on a PC mock only, not yet compiled/flashed on the real boards. The countdown display on the BUTTON is planned for later.
 
 ## Build Commands
@@ -86,9 +87,20 @@ Alternative without the module: a logic-level N-MOSFET (IRLZ44N, IRLB8721 or AO3
 LED choice:
 - Suggested part choice (not yet tested on the real build): 3 of the 10-pack 3 W COB chips (DC 9-11 V, 300 mA, 6500 K white, ~9 W total, ~0.9 A from the 12 V supply). Bare chips need a **series resistor per chip** (start with 10 ohm, 2 W; measure the current with a multimeter and go down to ~6.8 ohm if it is below ~250 mA), three such branches in parallel on the MOSFET drain. Mount them on aluminium or a heatsink and put a diffuser in front. Do not run all 10 (~36 W).
 - Power the strobe from its **own 12 V supply** (a 15 W adapter is plenty) and only tie its GND to the ESP32 GND. Do not run it from the 5 V USB charger: a 5 V / 2 A charger is already close to its limit during the KABOOM flash and a pulsed 1 A load would risk resets and DFPlayer noise.
+- Mounting: stick the chips on an aluminium heatsink with thin thermal double-sided tape (for example the 3M 8810 series, about 0.1-0.25 mm, rated about 0.6 W/mK; ratings of no-name tape are often inflated). Clean both surfaces with isopropyl alcohol and press firmly without bubbles. The strobe only runs about 1.5 s per show, so tape is enough; for continuous use or higher power use thermal epoxy or a clamp with thermal paste. Solder the wires and resistors before sticking the chips down.
 - Aim the strobe at the ring or the smoke, not at people's eyes. Flashes at 8-10 Hz are in the photosensitive-epilepsy range, so keep the burst short and put up a warning sign.
 
 Rough 5 V budget (WS2812B ~60 mA per LED at full white, scaled by brightness): at `setBrightness(10)` the white-hot ring is about 0.4 A; at 40 it is about 1.7 A. With the ESP32, DFPlayer and speaker, a 2 A charger is fine up to roughly brightness 20; above that use a 5 V / 4 A supply.
+
+## Battery power (KILLSWITCH, ESP32-S3 SuperMini)
+
+The board is the Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217). Findings:
+- It has a **TP4054** single-cell lithium charger (schematic from the Tinytronics download) and `B+` / `B-` battery pads (check the polarity on the silkscreen before connecting). The TP4054 charges to 4.2 V, so only LiPo / Li-ion cells, not LiFePO4. The charge current is set by a PROG resistor (about 2 kohm = 500 mA, 10 kohm = 100 mA, from memory); the actual value on this board is **not verified**, measure it once with a multimeter in series.
+- The blue LED is the **charge status**, not a low-battery warning: it blinks with no battery connected, stays on while charging, and goes out when the battery is full or when the board runs from the battery. (Per the seller's text; not measured.)
+- There is **no over-discharge protection** in the charger: use a protected LiPo cell (1000-2000 mAh is plenty).
+- Current draw (typical ESP32-S3 datasheet values, not measured on this board): about 90-100 mA with Wi-Fi listening all the time (the sketch sets `WiFi.setSleep(false)`, which the KILLSWITCH needs to receive the BUTTON's state), short transmit peaks of 200-300 mA. So roughly 4-5 h from 500 mAh, 8-9 h from 1000 mAh.
+- Charge it while the board is idle or off: with about 100 mA of load the TP4054 may never see its end-of-charge current, so the LED stays on and the cell sits at 4.2 V.
+- Not recommended: an ESP-01 (ESP8266) for the KILLSWITCH. It does ESP-NOW and has GPIO0 / GPIO2, but the sketch would need an ESP8266 port, both pins are boot-strapping pins, and a coin cell (CR2032) cannot deliver the Wi-Fi transmit peaks.
 
 ## Animations
 

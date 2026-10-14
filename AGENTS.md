@@ -11,6 +11,12 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - The BANGER never depends on the killswitch; only "BANG" triggers the show.
 - Re-check this principle (and the mock scenarios for it) whenever the state machine changes.
 
+## Hardware Notes
+- KILLSWITCH board: Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217), TP4054 LiPo charger, `B+`/`B-` pads, blue LED = charge status (blinks with no battery). Charge current (PROG resistor) not verified. No over-discharge protection: protected cell only. About 90-100 mA with Wi-Fi listening (sleep is off in `setup()`), so do not plan on a coin cell; ESP-01 (ESP8266) is not a drop-in (different ESP-NOW API, only GPIO0/GPIO2, boot-strapping pins).
+- Strip: the 1000 uF capacitor across 5 V / GND at the strip start is required, the 330 ohm on the data line stays, a 74AHCT125 level shifter is the fix if the first LEDs flicker. The DFPlayer 1 kohm RX resistor is optional. The arcade lamp is an LED with a 470 ohm series resistor inside (about 20 mA). See `docs/*_schematic.svg`.
+- Do not log `WiFi.macAddress()` early in `setup()`: before the Wi-Fi interface is up it prints 00:00:00:00:00:00 (it was removed on purpose).
+- Strobe chips are mounted with thin thermal double-sided tape (3M 8810 class) on aluminium; fine for the 1.5 s burst.
+
 ## Key Files
 
 ### `halloween-bang/halloween-bang.ino` (main firmware)
