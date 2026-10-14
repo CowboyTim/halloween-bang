@@ -1,3 +1,6 @@
 *~
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+# build output
+/dist/
+/halloween-bang/build/
