@@ -597,7 +597,6 @@ void setup() {
   // enable WiFi-now
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
-  LOG("MAC address: %s", WiFi.macAddress().c_str());
   if (esp_now_init() != ESP_OK) {
     LOG("Error initializing ESP-NOW");
     return;
