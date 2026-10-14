@@ -50,7 +50,7 @@
 
   <line x1="802" y1="215" x2="958" y2="215" stroke="#222" stroke-width="3.5" marker-end="url(#arr)"/>
   <text x="880" y="197" font-size="15" font-weight="bold" fill="#222" text-anchor="middle">BANG</text>
-  <text x="880" y="237" font-size="12" fill="#555" text-anchor="middle">unicast to the banger</text>
+  <text x="880" y="237" font-size="12" fill="#555" text-anchor="middle">unicast, sent 3x</text>
 
   <!-- ===== state machine of the BUTTON unit ===== -->
   <text x="40" y="404" font-size="22" font-weight="bold" fill="#1b1b1b">BUTTON unit states</text>

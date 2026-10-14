@@ -7,6 +7,7 @@ ESP32-based Halloween show with sound and LED effects: an ACME-style cartoon fus
 The show must always work. The killswitch/guard is a convenience for the actor, never a requirement for the show to run. If a kid presses the button too early and the show starts, that is acceptable. A show that does not run because of a connectivity problem (lost ARM, dead killswitch, flat battery, reboot) is not. So when designing or changing BUTTON/KILLSWITCH logic:
 - Every failure must end in the button working, not in it staying locked: the BUTTON works without any killswitch (boots READY), and a guarded lock is only a cooldown (`COOLDOWN_AFTER_SHOW_MS`, 30 s) that expires by itself.
 - Never add a path where a missing message, a dead unit or a reboot can leave the BUTTON locked forever. The only open-ended lock is an explicit LOCK from the actor (`hold_lock`), released by ARM.
+- Sends are best effort, so each is repeated: BUTTON -> BANGER "BANG" `BANG_REPEATS` (3) times, KILLSWITCH ARM/LOCK `KILL_REPEATS` (3) times, 60 ms apart. The receiver acts on the first copy and ignores the rest: the BANGER clears `trigger_animation` after `play_something()` so copies that arrive during the show never start a second one.
 - The BANGER never depends on the killswitch; only "BANG" triggers the show.
 - Re-check this principle (and the mock scenarios for it) whenever the state machine changes.
 

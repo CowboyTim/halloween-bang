@@ -286,6 +286,8 @@ void IRAM_ATTR button_pressed() {
 
 // KILLSWITCH unit
 #define ARM_HOLD_MS            1000    // hold this long to ARM, a shorter tap sends LOCK
+#define BANG_REPEATS           3       // BUTTON -> BANGER: "BANG" is sent this many times, the BANGER starts one show only
+#define BANG_REPEAT_GAP_MS     60
 #define KILL_REPEATS           3       // every command is sent this many times (broadcast has no retries)
 #define KILL_REPEAT_GAP_MS     60
 #define KILL_LED_PIN           GPIO_NUM_7   // on KILLSWITCH: status LED, 330 ohm to GND
@@ -328,6 +330,8 @@ uint32_t button_high_since = 0;     // millis() since the button was last seen r
 uint32_t last_lamp_ms      = 0;
 uint32_t last_status_ms    = 0;
 uint8_t  status_dirty      = 1;
+uint8_t  bang_repeats_left = 0;     // BANG copies still to send
+uint32_t bang_next_ms      = 0;
 
 void button_set_state(uint8_t s) {
   if (s == bstate) return;
@@ -422,13 +426,8 @@ void do_button_loop(){
         button_set_state(BS_LOCKED);   // (arm is ignored: nothing to arm)
       } else if (pressed) {
         LOG("ADHD style sending BANG");
-        char messaggio[] = "BANG";
-        esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
-        if(err != ESP_OK){
-          LOG("problem ESP-NOW send: %s", esp_err_to_name(err));
-        } else {
-          LOG("BANG sent!");
-        }
+        bang_repeats_left = BANG_REPEATS;   // sent below, a few times in a row
+        bang_next_ms      = now;
         button_set_state(BS_SHOW);
       }
       break;
@@ -443,6 +442,18 @@ void do_button_loop(){
   }
 
   // Outputs
+  // "BANG" goes out BANG_REPEATS times (any one copy is enough, the BANGER ignores the rest)
+  if (bang_repeats_left && now >= bang_next_ms) {
+    char messaggio[] = "BANG";
+    esp_err_t err = esp_now_send(receiverAddress, (uint8_t *)messaggio, strlen(messaggio));
+    if(err != ESP_OK){
+      LOG("problem ESP-NOW send: %s", esp_err_to_name(err));
+    } else {
+      LOG("BANG sent! (%d left)", bang_repeats_left - 1);
+    }
+    bang_repeats_left--;
+    bang_next_ms = now + BANG_REPEAT_GAP_MS;
+  }
   if (now - last_lamp_ms >= 10) {
     last_lamp_ms = now;
     ledcWrite(LED_12V_PIN, lamp_level(bstate, now - bstate_since));
@@ -620,6 +631,8 @@ void do_banger_loop(){
     if(!animation_is_playing()){
       printed_ready = 0;
       play_something();
+      // copies of the same BANG (and any early press) that arrived during the show are dropped
+      trigger_animation = 0;
     } else {
       LOG("animation already running");
     }
