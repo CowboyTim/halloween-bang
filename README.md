@@ -14,15 +14,17 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 ### BUTTON Mode
 - Press physical button to send "BANG" messages via ESP-NOW
 - Can trigger other BANGER devices wirelessly
-- Boots **LOCKED** (lamp dark, presses are thrown away) and only works after the KILLSWITCH arms it
-- Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s), then LOCKED again
+- Works on its own: boots **READY** and is READY again after every show (no KILLSWITCH needed)
+- Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it, and LOCKED again after every show. A power cycle of the BUTTON unit forgets the guard.
+- Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
 - Use: `EXTRA_FLAGS=-DBUTTON DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
 
-### KILLSWITCH Mode
+### KILLSWITCH Mode (optional)
 - A small ESP32-S3 SuperMini with one push button and one status LED, carried by the actor
 - **Tap = LOCK** (BUTTON locks immediately), **hold 1 s = ARM** (BUTTON goes COUNTDOWN, after `ARM_DELAY_MS` = 10 s and a released button it is READY)
 - ARM/LOCK are broadcast (no MAC needed) and sent 3x; the BUTTON reports its state (`S0`..`S3`) every second, so the LED shows: 2 quick blinks = no link, 1 blink/2 s = locked, 4 blinks/s = countdown, solid = ready, fast flicker = show
-- Fail-safe: any lost message, empty battery or reboot ends in LOCKED
+- Optional: skip it and everything works as before. Tap it once and the button is guarded.
+- Guarded mode is fail-safe (a lost ARM or a reboot of the KILLSWITCH leaves the button locked), but the very first LOCK is the one that must arrive: it is sent 3x, and the LED shows READY (solid) if it did not, so check it after tapping
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
 - Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
 - Use: `EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy`

@@ -250,12 +250,17 @@ void IRAM_ATTR button_pressed() {
 //    KILLSWITCH --"ARM" / "LOCK"-->  BUTTON  --"BANG"-->  BANGER
 //    KILLSWITCH <--"S0".."S3"-----   BUTTON  (its state, repeated every second)
 //
-//  The BUTTON only works while it is armed, so kids cannot start the show while the actor is
-//  still busy. If anything fails (lost packet, empty battery, reboot) it simply stays locked.
+//  The KILLSWITCH is OPTIONAL. Without one (or until its button is first pressed) the BUTTON
+//  just works: it boots READY and is READY again after every show.
+//  The first LOCK from a KILLSWITCH "guards" the button: from then on it only works after the
+//  actor ARMs it (and goes back to LOCKED after every show), so kids cannot start the show
+//  while the actor is still busy. A reboot of the BUTTON unit forgets the guard (back to READY).
 //
 //  Button states:
-//    LOCKED --ARM--> COUNTDOWN --(ARM_DELAY_MS)--> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> LOCKED
-//    LOCK sends COUNTDOWN / READY back to LOCKED. Presses in any other state are thrown away.
+//    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY          (not guarded)
+//    LOCK (from anywhere, also during SHOW) -> guarded; READY / COUNTDOWN -> LOCKED
+//    guarded: LOCKED --ARM--> COUNTDOWN --(ARM_DELAY_MS)--> READY --press--> SHOW --> LOCKED
+//    Presses in any state except READY are thrown away.
 //
 //  KILLSWITCH unit: ONE push button. Hold it ARM_HOLD_MS = ARM, a short tap = LOCK (so an
 //  accidental tap locks, it can never arm). Its LED shows what the BUTTON is doing.
@@ -311,7 +316,8 @@ uint8_t lamp_level(uint8_t state, uint32_t ms) {
 }
 
 // ---- BUTTON unit ---------------------------------------------------------
-uint8_t  bstate            = BS_LOCKED;
+uint8_t  bstate            = BS_READY;   // works out of the box; a KILLSWITCH LOCK guards it
+uint8_t  guarded           = 0;          // 1 after the first LOCK: needs ARM before every show
 uint32_t bstate_since      = 0;
 uint32_t button_high_since = 0;     // millis() since the button was last seen released (0 = pressed now)
 uint32_t last_lamp_ms      = 0;
@@ -355,7 +361,7 @@ void button_setup(){
 
   // 12V lamp: PWM so it can fade (set up after the CPU speed change)
   ledcAttach(LED_12V_PIN, LAMP_PWM_FREQ, LAMP_PWM_BITS);
-  ledcWrite(LED_12V_PIN, lamp_level(BS_LOCKED, 0));
+  ledcWrite(LED_12V_PIN, lamp_level(bstate, 0));
   bstate_since = millis();
 }
 
@@ -379,6 +385,8 @@ void do_button_loop(){
   }
   bool released = button_high_since && (now - button_high_since >= 50);
 
+  if (lock && !guarded) { guarded = 1; LOG("BUTTON now guarded by the KILLSWITCH"); }
+
   switch (bstate) {
     case BS_LOCKED:
       if (arm) button_set_state(BS_COUNTDOWN);
@@ -396,7 +404,7 @@ void do_button_loop(){
       break;
     case BS_READY:
       if (lock) {
-        button_set_state(BS_LOCKED);
+        button_set_state(BS_LOCKED);   // (arm is ignored: nothing to arm)
       } else if (pressed) {
         LOG("ADHD style sending BANG");
         char messaggio[] = "BANG";
@@ -410,9 +418,11 @@ void do_button_loop(){
       }
       break;
     case BS_SHOW:
-      // the show runs on the BANGER; this is just a timer (ARM and LOCK are ignored meanwhile)
+      // the show runs on the BANGER; this is just a timer (ARM is ignored meanwhile, a LOCK is remembered)
       if (now - bstate_since >= WAIT_TIME_BUTTON) {
-        button_set_state(AUTO_REARM_AFTER_SHOW ? BS_COUNTDOWN : BS_LOCKED);
+        if (!guarded)                button_set_state(BS_READY);
+        else if (AUTO_REARM_AFTER_SHOW) button_set_state(BS_COUNTDOWN);
+        else                         button_set_state(BS_LOCKED);
       }
       break;
   }

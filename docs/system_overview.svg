@@ -10,12 +10,12 @@
   <rect width="1300" height="980" fill="#ffffff"/>
 
   <text x="40" y="46" font-size="26" font-weight="bold" fill="#1b1b1b">Halloween Bang - three units</text>
-  <text x="40" y="72" font-size="14" fill="#555">All three talk over ESP-NOW. ARM, LOCK and the state reports are broadcast, so no extra MAC addresses are needed.</text>
+  <text x="40" y="72" font-size="14" fill="#555">All three talk over ESP-NOW. The KILLSWITCH is optional: without it the BUTTON simply works. ARM, LOCK and the state reports are broadcast (no extra MAC addresses).</text>
 
   <!-- ===== units ===== -->
   <rect x="40" y="100" width="300" height="230" rx="12" fill="#fff4e6" stroke="#e8590c" stroke-width="3"/>
   <text x="190" y="136" font-size="22" font-weight="bold" fill="#d9480f" text-anchor="middle">KILLSWITCH</text>
-  <text x="190" y="158" font-size="13" fill="#555" text-anchor="middle">the actor  -  build flag -DKILLSWITCH</text>
+  <text x="190" y="158" font-size="13" fill="#555" text-anchor="middle">OPTIONAL  -  the actor  -  -DKILLSWITCH</text>
   <text x="190" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 SuperMini</text>
   <text x="190" y="224" font-size="14" fill="#333" text-anchor="middle">1 push button + status LED</text>
   <text x="190" y="248" font-size="14" fill="#333" text-anchor="middle">USB power bank</text>
@@ -28,8 +28,8 @@
   <text x="650" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 SuperMini</text>
   <text x="650" y="224" font-size="14" fill="#333" text-anchor="middle">100 mm arcade button, 12 V lamp</text>
   <text x="650" y="248" font-size="14" fill="#333" text-anchor="middle">2N2222 (PWM) + MT3608 boost</text>
-  <text x="650" y="284" font-size="14" font-weight="bold" fill="#c92a2a" text-anchor="middle">works only when armed</text>
-  <text x="650" y="306" font-size="13" fill="#555" text-anchor="middle">boots LOCKED</text>
+  <text x="650" y="284" font-size="14" font-weight="bold" fill="#c92a2a" text-anchor="middle">works on its own (boots READY)</text>
+  <text x="650" y="306" font-size="13" fill="#555" text-anchor="middle">first LOCK = guarded: needs ARM</text>
 
   <rect x="960" y="100" width="300" height="230" rx="12" fill="#e7f5ff" stroke="#1971c2" stroke-width="3"/>
   <text x="1110" y="136" font-size="22" font-weight="bold" fill="#1864ab" text-anchor="middle">BANGER</text>
@@ -54,7 +54,7 @@
 
   <!-- ===== state machine of the BUTTON unit ===== -->
   <text x="40" y="404" font-size="22" font-weight="bold" fill="#1b1b1b">BUTTON unit states</text>
-  <text x="40" y="428" font-size="14" fill="#555">Presses in any state except READY are thrown away. A lost packet, an empty battery or a reboot always ends in LOCKED.</text>
+  <text x="40" y="428" font-size="14" fill="#555">Presses in any state except READY are thrown away. Power on = READY. The first LOCK guards the button.</text>
 
   <rect x="40" y="470" width="230" height="170" rx="12" fill="#e9ecef" stroke="#495057" stroke-width="3"/>
   <text x="155" y="504" font-size="20" font-weight="bold" fill="#343a40" text-anchor="middle">LOCKED</text>
@@ -75,6 +75,8 @@
   <text x="835" y="534" font-size="13" fill="#333" text-anchor="middle">lamp breathes slowly</text>
   <text x="835" y="554" font-size="13" fill="#333" text-anchor="middle">a press sends BANG</text>
   <text x="835" y="590" font-size="12" fill="#d9480f" text-anchor="middle">killswitch LED:</text>
+  <line x1="835" y1="440" x2="835" y2="468" stroke="#222" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="880" y="454" font-size="12" fill="#222">power on</text>
   <text x="835" y="608" font-size="12" fill="#d9480f" text-anchor="middle">solid on</text>
 
   <rect x="1060" y="470" width="200" height="170" rx="12" fill="#ffe3e3" stroke="#c92a2a" stroke-width="3"/>
@@ -98,7 +100,11 @@
   <!-- SHOW back to LOCKED (long way round, below) -->
   <polyline points="1160,642 1160,720 155,720 155,642" fill="none" stroke="#222" stroke-width="3.5" marker-end="url(#arr)"/>
   <text x="665" y="686" font-size="12" font-weight="bold" fill="#222" text-anchor="middle">after the show: 16 s (WAIT_TIME_BUTTON)</text>
-  <text x="665" y="704" font-size="11" fill="#222" text-anchor="middle">or into COUNTDOWN if AUTO_REARM_AFTER_SHOW = 1</text>
+  <text x="665" y="704" font-size="11" fill="#222" text-anchor="middle">guarded: LOCKED (or COUNTDOWN, AUTO_REARM)</text>
+
+  <!-- not guarded: SHOW back to READY -->
+  <polyline points="1100,642 1100,670 880,670 880,642" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arr)"/>
+  <text x="990" y="662" font-size="11" fill="#2b8a3e" text-anchor="middle">not guarded: READY again</text>
 
   <!-- LOCK transitions -->
   <polyline points="495,642 495,780 190,780 190,642" fill="none" stroke="#c62828" stroke-width="3.5" marker-end="url(#arrr)"/>
@@ -108,7 +114,7 @@
 
   <!-- notes -->
   <rect x="40" y="860" width="1220" height="90" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
-  <text x="58" y="888" font-size="13" fill="#333">ARM or LOCK while the show runs is ignored. The BUTTON repeats its state every second, so the killswitch LED shows "no link" (2 quick blinks) after 3.5 s of silence.</text>
-  <text x="58" y="912" font-size="13" fill="#333">Each ARM / LOCK is sent 3 times because ESP-NOW broadcast has no retries. If all 3 are lost, the button just stays locked (safe) and the LED shows it.</text>
+  <text x="58" y="888" font-size="13" fill="#333">The first LOCK guards the button. ARM during the show is ignored, a LOCK during the show is remembered. Power cycle of the BUTTON = unguarded again.</text>
+  <text x="58" y="912" font-size="13" fill="#333">Each ARM / LOCK is sent 3 times (broadcast has no retries). The BUTTON reports its state every second: check the killswitch LED (solid = READY) after pressing.</text>
   <text x="58" y="936" font-size="13" fill="#333">Countdown display on the button: planned for a later step (the code already has the COUNTDOWN state and its timer).</text>
 </svg>
