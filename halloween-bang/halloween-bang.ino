@@ -40,7 +40,7 @@
 #define BUTTON_PIN          GPIO_NUM_8  // on BUTTON
 #define LED_12V_PIN         GPIO_NUM_7  // on BUTTON
 
-#define WAIT_TIME_BUTTON    3000        // configurable wait time (ms) for button mode - time of animation the banger is showing
+#define WAIT_TIME_BUTTON    16000       // configurable wait time (ms) for button mode - time of animation the banger is showing (whole show is ~14.5s: 0001.mp3 10.3s + 0002.mp3 4.0s)
 
 #define IS_BUTTON     1
 #define IS_BANGER     2
