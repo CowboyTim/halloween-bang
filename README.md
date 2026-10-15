@@ -38,6 +38,16 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Power: a USB power bank. Most C3 SuperMini boards have no LiPo charger or `B+` / `B-` pads (see "Battery power" below)
 - Status: flashed on the ESP32-C3 SuperMini, tested with the on-board BOOT button
 
+### EXPLOSION Mode (optional sound box)
+- A second, sound-only box that plays the same `0001.mp3` (fuse) and `0002.mp3` (KABOOM) as the BANGER, in another place (for example farther away, or with a bigger speaker)
+- The BANGER tells it when each sound starts (`SND1`, `SND2`, sent just before the BANGER plays the sound). The BANGER still plays both sounds itself, and it does not wait for the box, so the show runs the same if the box is off, out of range or broken
+- Repeated `SND` copies within 1 s are ignored
+- Needs its own DFPlayer, speaker, 5 V supply and an SD card with the same two files
+- Power the DFPlayer from **5 V**, not from the C3's 3.3 V regulator. The C3's Wi-Fi transmit peaks draw from that regulator too; a 3 W speaker on the same rail makes it sag, which can reset the C3 or distort the sound. Use the SuperMini's 5 V pin (USB) or a 5 V supply, with the grounds joined.
+- To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.explosion]`, `python3 bang.py deploy explosion`, then `python3 bang.py deploy banger` (the BANGER needs the box's MAC at build time)
+- To turn it off: unpower it. No rebuild needed
+- Status: firmware written, not yet flashed or tested. Its schematic is not drawn yet
+
 ## Build Commands
 
 `bang.py` builds, flashes and monitors the boards listed in `boards.toml` (name, MAC, chip, role). It finds each board's serial port by its MAC, so it does not matter which `/dev/ttyACM*` a board gets: native-USB ESP32-S3/C3 boards report their MAC as the USB serial number, so finding them needs no reset. Flashing goes through esptool with `--chip` from `boards.toml`, so esptool refuses a board of the wrong chip type, and afterwards the MAC that esptool read is checked again.
@@ -164,6 +174,44 @@ python convert_for_dfplayer.py input_file.mp3 -o 0001.mp3
 
 This converts to 44.1kHz, 192kbps constant bitrate MP3 compatible with the DFPlayer Mini. Copy the files to the SD card root as `0001.mp3` and `0002.mp3`.
 
+### Preparing the SD card (16 GB)
+
+The same two files go on the BANGER's card and on the EXPLOSION box's card. `sd.txt` shows the partition layout of a 16 GB card that works: one primary partition, MBR (DOS) table, starting at sector 2048, type `b` (W95 FAT32). The card reports about 14.8 GiB.
+
+Formatting erases the whole card. Check the device name first: the card should show about 14.9 GB and no other disk should match it.
+
+**Linux** (replace `/dev/sdX` with your card, e.g. `/dev/sdb`; check with `lsblk`):
+```
+sudo umount /dev/sdX?                  # if it was auto-mounted (an error here is fine)
+sudo fdisk /dev/sdX
+#   o      new empty DOS (MBR) partition table
+#   n p 1  primary partition 1, Enter, Enter (use the whole card)
+#   t b    type W95 FAT32, as in sd.txt
+#   w      write and quit
+sudo partprobe /dev/sdX
+sudo mkfs.vfat -F 32 -n BANG /dev/sdX1
+```
+
+**Windows:** in Explorer right-click the card, Format, file system **FAT32**, allocation unit size default, quick format. Windows can format a 16 GB card as FAT32 (its own limit is 32 GB).
+
+**macOS:** Disk Utility, select the card (not the top-level entry with the name only), Erase, format **MS-DOS (FAT)**, scheme **Master Boot Record**, name `BANG`.
+
+Then copy the sounds:
+
+1. Copy `0001.mp3` first, then `0002.mp3`, into the **root** of the card (not a folder).
+2. Keep nothing else on the card. The DFPlayer finds tracks 1 and 2 by their position on the card, so the card should hold exactly these two files.
+3. Remove the hidden files that the computer adds. On macOS these are `.Spotlight-V100`, `.Trashes` and `._*` files; on Windows `System Volume Information`. For example, on macOS:
+   ```
+   rm -rf /Volumes/BANG/.Spotlight-V100 /Volumes/BANG/.Trashes /Volumes/BANG/._* /Volumes/BANG/.fseventsd
+   ```
+4. Eject the card properly before taking it out.
+
+Power off the board before putting the card in or taking it out. The card is read at boot; if the DFPlayer is not found, check the card in this order: format (FAT32, MBR), file names (`0001.mp3`, `0002.mp3` in the root), no other files, card seated, then reboot.
+
+A 16 GB card is much bigger than needed: the two files together are about 360 KB. Any card up to 32 GB works.
+
+To test a card: boot the board with logging on (`python3 bang.py monitor banger`). The log should show `DFPlayer Mini ready` and `DFPlayer BUSY HIGH, continue`. A show should then print `Playing File: 1` and `Playing File: 2`.
+
 ## Development Notes
 
 ### Board GPIO Pinouts
@@ -176,7 +224,8 @@ The firmware uses specific GPIO pins for the DFPlayer Mini UART (GPIO 12 TX, GPI
 
 ### Brightness and volume
 - `strip.setBrightness(10)` keeps current draw safe but leaves few usable levels per colour, so dim parts (unburnt fuse, fade-outs) can look steppy. Raise it to ~40 once the power supply allows. Gamma (`setGamma(true)`) is off on purpose at low brightness.
-- `SOUND_VOLUME` is 20 of 30. The MP3s are mastered loud; adjust on site.
+- `SOUND_VOLUME` is set per role in the sketch: BANGER 20 of 30, EXPLOSION box 10 of 30 (lowered while its DFPlayer ran from the C3's 3.3 V pin). The MP3s are mastered loud; adjust on site.
+- The DFPlayer library has one volume command (`0x06`, 0-30) and an on/off switch for the line-out (DAC, `0x1A`), so there is no separate line-out level in the protocol. Whether the line-out follows the volume setting is not tested on this module yet. If it does not need a separate level, feed the line-out into a small amplifier with its own volume knob and keep the DFPlayer at a fixed level
 
 ## Environment Variables
 - `EXTRA_FLAGS` - extra compiler flags (also `--flags`)

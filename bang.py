@@ -35,7 +35,7 @@ BOARDS_FILE = os.path.join(HERE, "boards.toml")
 DIST = os.path.join(HERE, "dist")
 BUILD_CACHE = os.path.join(HERE, ".build")
 PLATFORM = "esp32:esp32"
-ROLES = ("BANGER", "BUTTON", "KILLSWITCH")
+ROLES = ("BANGER", "BUTTON", "KILLSWITCH", "EXPLOSION")
 
 # Per chip: arduino-cli FQBN and esptool --chip. Both chips use the bootloader
 # at 0x0, the partition table at 0x8000 and the app at 0x10000 (partitions.csv).
@@ -283,11 +283,28 @@ def cmd_identify(args, boards):
         print(f"[boards.NAME]\nmac  = \"{mac}\"\nchip = \"{chip or '?'}\"\nrole = \"BUTTON\"")
 
 
+def mac_flag(name, mac):
+    return f"-D{name}=" + ",".join("0x" + x for x in mac.split(":"))
+
+
+def explosion_mac(boards):
+    """MAC of the EXPLOSION sound box (optional), or None while it is not in boards.toml with a MAC."""
+    boxes = [b for b in boards.values() if b["role"] == "EXPLOSION" and b["mac"]]
+    if len(boxes) > 1:
+        die("boards.toml: more than one EXPLOSION board")
+    return boxes[0]["mac"] if boxes else None
+
+
 def build_flags(board, boards, args):
     flags = [BASE_FLAGS, "-D" + board["role"]]
-    peer = banger_mac(boards, board)
-    if peer:
-        flags.append("-DBANGER_MAC=" + ",".join("0x" + x for x in peer.split(":")))
+    if board["role"] in ("BUTTON", "KILLSWITCH"):
+        peer = banger_mac(boards, board)
+        if peer:
+            flags.append(mac_flag("BANGER_MAC", peer))
+    if board["role"] == "BANGER":
+        box = explosion_mac(boards)
+        if box:
+            flags.append(mac_flag("EXPLOSION_MAC", box))
     if args.log:
         flags.append("-DLOG_VERBOSE")
     if os.environ.get("DEBUG") == "1":

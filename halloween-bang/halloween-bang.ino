@@ -38,12 +38,25 @@
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
 
-#define SOUND_VOLUME        20
+#ifdef EXPLOSION
+#define SOUND_VOLUME        10  // EXPLOSION box, DFPlayer volume 0-30: lowered while its DFPlayer ran from 3.3 V
+#else
+#define SOUND_VOLUME        20  // BANGER, DFPlayer volume 0-30
+#endif
 #define SOUND_1             1
 #define SOUND_2             2
-#define DFPLAYER_BUSY_PIN   GPIO_NUM_7  // on BANGER
-#define DFPLAYER_TX_PIN     GPIO_NUM_12 // on BANGER
-#define DFPLAYER_RX_PIN     GPIO_NUM_13 // on BANGER
+#if defined(EXPLOSION) && CONFIG_IDF_TARGET_ESP32C3
+// EXPLOSION sound box on a C3 SuperMini (free pins, UART1)
+#define DFPLAYER_UART_NR    1
+#define DFPLAYER_BUSY_PIN   GPIO_NUM_3  // on EXPLOSION (C3): DFPlayer BUSY
+#define DFPLAYER_TX_PIN     GPIO_NUM_5  // on EXPLOSION (C3): to DFPlayer RX
+#define DFPLAYER_RX_PIN     GPIO_NUM_6  // on EXPLOSION (C3): from DFPlayer TX
+#else
+#define DFPLAYER_UART_NR    2
+#define DFPLAYER_BUSY_PIN   GPIO_NUM_7  // on BANGER (and EXPLOSION on an S3)
+#define DFPLAYER_TX_PIN     GPIO_NUM_12 // on BANGER (and EXPLOSION on an S3)
+#define DFPLAYER_RX_PIN     GPIO_NUM_13 // on BANGER (and EXPLOSION on an S3)
+#endif
 
 // The light show must run without the DFPlayer (not wired, no SD card, BUSY stuck LOW):
 // boot gives up on it after these limits and the show then runs on its own timers.
@@ -80,6 +93,7 @@
 #define IS_BUTTON     1
 #define IS_BANGER     2
 #define IS_KILLSWITCH 3
+#define IS_EXPLOSION  4     // sound box only: plays the sounds the BANGER announces (SND1 / SND2)
 #if CONFIG_IDF_TARGET_ESP32C3 && (defined(BANGER) || defined(BUTTON))
 #error "BANGER and BUTTON pins are for the ESP32-S3 (GPIO 12/13 are flash pins on the C3); only KILLSWITCH has C3 pins"
 #endif
@@ -91,6 +105,9 @@ uint8_t WHAT = IS_BANGER;
 #endif
 #ifdef KILLSWITCH
 uint8_t WHAT = IS_KILLSWITCH;
+#endif
+#ifdef EXPLOSION
+uint8_t WHAT = IS_EXPLOSION;
 #endif
 
 #define LINE_START    0
@@ -105,7 +122,7 @@ uint8_t WHAT = IS_KILLSWITCH;
 #define NUM_LEDS                   300  // can be shorter
 EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812GRB);
 
-HardwareSerial DFPLayerSerial(2);  // Use UART2
+HardwareSerial DFPLayerSerial(DFPLAYER_UART_NR);
 DFRobotDFPlayerMini myDFPlayer;
 
 uint8_t animation_is_running = 0;
@@ -116,6 +133,10 @@ unsigned long last_activity = 0;
 #define BANGER_MAC 0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0
 #endif
 uint8_t receiverAddress[] = {BANGER_MAC};
+#ifdef EXPLOSION_MAC                 // optional: the BANGER also announces its sounds to this box
+uint8_t explosionAddress[] = {EXPLOSION_MAC};
+#endif
+volatile uint8_t snd_req = 0;        // EXPLOSION: SOUND_1 or SOUND_2 announced by the BANGER
 
 #define WATCHDOG_TIMEOUT_MS 60000   // 60s
 esp_task_wdt_user_handle_t wdt_user_handle;
@@ -247,6 +268,8 @@ void setup_cpu_speed(uint32_t freq_mhz = 160) {
 //   "BANG"      BUTTON     -> BANGER      start the show
 //   "LOCK"      KILLSWITCH -> BUTTON      repeated while the killswitch is held: keep the button locked
 //   "FREE"      KILLSWITCH -> BUTTON      killswitch released: unlock now (else the lock times out)
+//   "SND1"      BANGER     -> EXPLOSION   the BANGER starts 0001.mp3 (the fuse), play it too
+//   "SND2"      BANGER     -> EXPLOSION   the BANGER starts 0002.mp3 (the KABOOM), play it too
 volatile uint32_t lock_seen_ms    = 0;   // BUTTON: millis() of the last "LOCK" (0 = none / freed)
 uint8_t broadcastAddress[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
@@ -262,6 +285,10 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
     lock_seen_ms = t ? t : 1;
   } else if(msg_is(msg, len, "FREE")) {
     lock_seen_ms = 0;
+  } else if(msg_is(msg, len, "SND1")) {
+    snd_req = SOUND_1;
+  } else if(msg_is(msg, len, "SND2")) {
+    snd_req = SOUND_2;
   }
 }
 // ==== MESSAGES END ====
@@ -568,27 +595,16 @@ void do_killswitch_loop(){
 }
 // ==== BUTTON / KILLSWITCH END ====
 
-void banger_setup(){
-  // first, so a BANG is never missed whatever happens with the DFPlayer below
-  esp_now_register_recv_cb(OnDataRecv);
-
-#if STROBE_ENABLED
-  // strobe LED off from the start (the 10k pull-down keeps it off while the ESP32 boots)
-  pinMode(STROBE_PIN, OUTPUT);
-  digitalWrite(STROBE_PIN, LOW);
-#endif
-
-  // Fancy led strip
-  setup_led_strip();
-
+// DFPlayer on the DFPLAYER_* pins, sets sound_ok. Shared by the BANGER and the EXPLOSION box.
+void sound_setup(){
   // DFPPlayer serial setup
   doYIELD;
   LOG("DFPlayer Mini WAIT 1");
-  delay(1000);
-  LOG("DFPlayer UART setup");
+  delay(3000);
+  LOG("DFPlayer UART setup: 9600, %d, %d, %d", SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   LOG("DFPlayer Mini WAIT 2");
-  delay(1000);
+  delay(3000);
   // pull-up: an unconnected BUSY wire reads HIGH = "not playing"
   pinMode(DFPLAYER_BUSY_PIN, INPUT_PULLUP);
 
@@ -621,11 +637,60 @@ void banger_setup(){
     return;
   }
   LOG("DFPlayer BUSY HIGH, continue");
-  myDFPlayer.volume(10);
+  myDFPlayer.volume(SOUND_VOLUME);
   myDFPlayer.EQ(DFPLAYER_EQ_ROCK);
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
   myDFPlayer.enableDAC();
   LOG("DFPlayer setup complete");
+}
+
+void banger_setup(){
+  // first, so a BANG is never missed whatever happens with the DFPlayer below
+  esp_now_register_recv_cb(OnDataRecv);
+
+#if STROBE_ENABLED
+  // strobe LED off from the start (the 10k pull-down keeps it off while the ESP32 boots)
+  pinMode(STROBE_PIN, OUTPUT);
+  digitalWrite(STROBE_PIN, LOW);
+#endif
+
+  // Fancy led strip
+  setup_led_strip();
+
+#ifdef EXPLOSION_MAC
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, explosionAddress, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  esp_now_add_peer(&peerInfo);
+  LOG("EXPLOSION box: its sounds are announced to it");
+#endif
+
+  sound_setup();
+}
+
+void explosion_setup(){
+  // first, so a SND is never missed whatever happens with the DFPlayer below
+  esp_now_register_recv_cb(OnDataRecv);
+  sound_setup();
+}
+
+// EXPLOSION box: plays the sound the BANGER announces. A repeated SND (the BANGER sends
+// each one once, the Wi-Fi retries it) is ignored for SND_DEDUPE_MS after it played.
+#define SND_DEDUPE_MS 1000
+uint32_t snd_last_ms[3] = {0, 0, 0};
+
+void do_explosion_loop(){
+  if(snd_req){
+    uint8_t n = snd_req;
+    snd_req = 0;
+    uint32_t now = millis();
+    if(!snd_last_ms[n] || now - snd_last_ms[n] >= SND_DEDUPE_MS){
+      snd_last_ms[n] = now ? now : 1;
+      play_sound(n);
+    }
+  }
+  delay(2);
 }
 
 void setup() {
@@ -662,6 +727,9 @@ void setup() {
   }
   if(WHAT == IS_KILLSWITCH){
      killswitch_setup();
+  }
+  if(WHAT == IS_EXPLOSION){
+     explosion_setup();
   }
 }
 
@@ -703,6 +771,9 @@ void loop() {
   }
   if(WHAT == IS_KILLSWITCH){
       do_killswitch_loop();
+  }
+  if(WHAT == IS_EXPLOSION){
+      do_explosion_loop();
   }
 }
 
@@ -746,11 +817,22 @@ void play_sound(uint8_t n){
   myDFPlayer.play(n);
 }
 
+// tell the EXPLOSION box (if this build has one) that a sound starts now. Sent whether or not
+// the DFPlayer here works. The box is never waited for; check on the bench that a missing box
+// does not delay the show (esp_now_send to an absent peer may take time while Wi-Fi retries)
+void send_snd(uint8_t n){
+#ifdef EXPLOSION_MAC
+  const char *m = (n == SOUND_1) ? "SND1" : "SND2";
+  esp_now_send(explosionAddress, (const uint8_t *)m, 4);
+#endif
+}
+
 void play_something() {
   animation_is_running = 1;
   last_activity = millis();
 
   // sound effect 1 (Whooosh)
+  send_snd(SOUND_1);
   play_sound(SOUND_1);
 
   // ledstrip clear, +1
@@ -760,6 +842,7 @@ void play_something() {
   // sound effect (Kabooom)
   if(sound_ok)
     myDFPlayer.stop();
+  send_snd(SOUND_2);
   play_sound(SOUND_2);
 
   // ledstrip +2, clear

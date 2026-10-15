@@ -26,7 +26,7 @@ The show must always work. The killswitch is a convenience for the actor, never 
   - **BANGER**: Receives "BANG" via ESP-NOW → plays sounds/animations
   - **BUTTON**: Non-blocking state machine, states LOCKED / READY / SHOW. KILLSWITCH is optional: boots READY. READY → (press: unicast "BANG") SHOW → (`WAIT_TIME_BUTTON` 16 s) READY, or LOCKED if the killswitch is held. READY → LOCKED while LOCKs arrive (`lock_seen_ms`, set in the ESP-NOW callback, cleared by FREE; compare with signed `int32_t` maths). LOCKED → READY on FREE, `LOCK_TIMEOUT_MS` without LOCK, or `LOCK_MAX_MS` (`lock_expired`: LOCKs ignored until the stream stops), once the button is released (a queued press is cleared). A LOCK during SHOW does not stop the show. Lamp = PWM on `LED_12V_PIN` (GPIO 7), patterns in `lamp_level()`. Sends nothing back to the KILLSWITCH: the lamp is the actor's feedback.
   - **KILLSWITCH** (optional): ESP32-C3 SuperMini, GPIO 3 button + on-board BOOT (GPIO 9), on-board LED (GPIO 8). Held (push button or switch) = broadcast "LOCK" every 150 ms; release = "FREE" 3x. After `LOCK_MAX_MS` held it stops sending LOCK, sends FREE and blinks fast until released. Send-only: LED on while held, fast blink = expired, 1 blink at power-up; it does not show the BUTTON state (`LOCK_MAX_MS` is `#ifndef`, so a test build can pass `--flags=-DLOCK_MAX_MS=...`). Schematics: `docs/killswitch_schematic.svg`, `docs/system_overview.svg`.
-- Messages (block `MESSAGES BEGIN/END`, strict length+memcmp matching): "BANG", "LOCK", "FREE". CPU must run ≥80 MHz for ESP-NOW (`setup_cpu_speed(80)`).
+- Messages (block `MESSAGES BEGIN/END`, strict length+memcmp matching): "BANG", "LOCK", "FREE", "SND1", "SND2". "SND1"/"SND2" go from the BANGER to the optional EXPLOSION box just before it starts 0001.mp3 / 0002.mp3 itself; the box plays the same file, ignores repeats for `SND_DEDUPE_MS` (1 s), and nothing waits for it. CPU must run ≥80 MHz for ESP-NOW (`setup_cpu_speed(80)`).
 - BANGER (ESP32-S3 Zero) and BUTTON (ESP32-S3 SuperMini, soldered in, stays S3) are built, flashed and verified working on the real boards (`python3 bang.py deploy banger button`). KILLSWITCH (ESP32-C3 SuperMini) is flashed with the hold-to-lock firmware. The planned countdown 8-segment display belonged to the removed ARM/COUNTDOWN design; rethink it before building it.
 - Serial logging needs `-DLOG_VERBOSE` (`bang.py ... --log`).
 - Controls 300 WS2812B LEDs (5 m, 60 LED/m) via `EdSoftLED` library
@@ -82,7 +82,7 @@ The show must always work. The killswitch is a convenience for the actor, never 
 - Bootloader and partitions binaries
 
 ## Operation
-- Three modes: `BANGER` (wireless trigger), `BUTTON` (local button), optional `KILLSWITCH` (actor's arm/lock)
+- Modes (roles): `BANGER` (wireless trigger, lights + sound), `BUTTON` (local button), optional `KILLSWITCH` (hold-to-lock), optional `EXPLOSION` (sound only: plays the BANGER's sounds in a second place; build flag `-DEXPLOSION`, chip per `boards.toml`, the BANGER gets its MAC as `-DEXPLOSION_MAC` only when the box is in `boards.toml` with a MAC, so rebuild the BANGER after adding it)
 - `BANGER` mode receives "BANG" messages via ESP-NOW from other devices
 - `BUTTON` mode sends "BANG" messages when button pressed. Presses made while the lamp blinks (during the show) are discarded: after `WAIT_TIME_BUTTON` the code waits for the button to be released, debounces, and clears the queued interrupt flag (`button_was_pressed`) before the lamp comes back on.
 - Both modes play sound effects and LED animations

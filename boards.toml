@@ -19,6 +19,13 @@ mac  = "d0:cf:13:30:14:14"
 chip = "esp32s3"           # ESP32-S3 SuperMini (soldered in, stays S3)
 role = "BUTTON"
 
+# Optional sound-only box (same 0001.mp3 / 0002.mp3 SD card as the BANGER). The BANGER announces
+# each sound to it. Leave it out, or unpower it, and the show runs the same.
+[boards.explosion]
+mac  = "64:E8:33:82:FD:A0" # rebuild the BANGER after changing this (see bang.py identify)
+chip = "esp32c3"           # C3 SuperMini (pins: see the EXPLOSION block in the sketch)
+role = "EXPLOSION"
+
 [boards.killswitch]
 mac  = "ec:da:3b:bf:72:dc"
 chip = "esp32c3"           # ESP32-C3 SuperMini
