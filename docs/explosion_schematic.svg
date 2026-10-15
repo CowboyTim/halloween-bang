@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 880" width="1100" height="880" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
+  <rect width="1100" height="880" fill="#ffffff"/>
+  <text x="30" y="36" font-size="24" font-weight="bold" fill="#1b1b1b" text-anchor="start">EXPLOSION sound box - ESP32-C3 SuperMini + DFPlayer Mini (5 V)</text>
+  <text x="30" y="60" font-size="13" font-weight="normal" fill="#555" text-anchor="start">Build flag -DEXPLOSION. Sound only: no strip, no strobe. Same 0001.mp3 / 0002.mp3 SD card as the BANGER. Pins as in the sketch (C3 branch of DFPLAYER_*_PIN).</text>
+  <polyline points="430,150 430,80 900,80" fill="none" stroke="#c62828" stroke-width="4"/>
+  <text x="440" y="72" font-size="13" font-weight="bold" fill="#c62828" text-anchor="start">+5 V</text>
+  <polyline points="90,330 90,840 900,840" fill="none" stroke="#111" stroke-width="4"/>
+  <text x="100" y="832" font-size="13" font-weight="bold" fill="#111" text-anchor="start">GND</text>
+  <polyline points="900,120 900,80" fill="none" stroke="#c62828" stroke-width="4"/>
+  <polyline points="900,440 900,840" fill="none" stroke="#111" stroke-width="4"/>
+  <rect x="120" y="120" width="280" height="320" rx="10" fill="#eef2f7" stroke="#37474f" stroke-width="3"/>
+  <text x="260" y="150" font-size="15" font-weight="bold" fill="#37474f" text-anchor="middle">DFPlayer Mini</text>
+  <circle cx="120" cy="190" r="5" fill="#111"/>
+  <text x="132" y="194" font-size="12" font-weight="normal" fill="#777" text-anchor="start">DAC_R</text>
+  <circle cx="120" cy="230" r="5" fill="#111"/>
+  <text x="132" y="234" font-size="12" font-weight="normal" fill="#777" text-anchor="start">DAC_I</text>
+  <circle cx="120" cy="330" r="5" fill="#111"/>
+  <text x="132" y="334" font-size="12" font-weight="normal" fill="#111" text-anchor="start">GND</text>
+  <polyline points="120,330 90,330" fill="none" stroke="#111" stroke-width="3"/>
+  <text x="132" y="256" font-size="11" font-weight="normal" fill="#777" text-anchor="start">line-out, not used</text>
+  <circle cx="400" cy="150" r="5" fill="#111"/>
+  <text x="388" y="154" font-size="12" font-weight="bold" fill="#c62828" text-anchor="end">VCC</text>
+  <circle cx="400" cy="190" r="5" fill="#111"/>
+  <text x="388" y="194" font-size="12" font-weight="bold" fill="#0d47a1" text-anchor="end">RX</text>
+  <circle cx="400" cy="230" r="5" fill="#111"/>
+  <text x="388" y="234" font-size="12" font-weight="bold" fill="#0d47a1" text-anchor="end">TX</text>
+  <circle cx="400" cy="270" r="5" fill="#111"/>
+  <text x="388" y="274" font-size="12" font-weight="bold" fill="#0d47a1" text-anchor="end">BUSY</text>
+  <circle cx="400" cy="370" r="5" fill="#111"/>
+  <text x="388" y="374" font-size="12" font-weight="bold" fill="#222" text-anchor="end">SPK_1</text>
+  <circle cx="400" cy="410" r="5" fill="#111"/>
+  <text x="388" y="414" font-size="12" font-weight="bold" fill="#222" text-anchor="end">SPK_2</text>
+  <polyline points="400,150 430,150" fill="none" stroke="#c62828" stroke-width="3"/>
+  <text x="260" y="470" font-size="12" font-weight="normal" fill="#444" text-anchor="middle">microSD (FAT32): 0001.mp3 and 0002.mp3 in the root</text>
+  <polyline points="400,370 470,370" fill="none" stroke="#222" stroke-width="3"/>
+  <polyline points="400,410 470,410" fill="none" stroke="#222" stroke-width="3"/>
+  <rect x="470" y="340" width="170" height="100" rx="10" fill="#fff7ed" stroke="#b45309" stroke-width="3"/>
+  <text x="555" y="385" font-size="14" font-weight="bold" fill="#b45309" text-anchor="middle">3 W speaker</text>
+  <rect x="720" y="120" width="320" height="320" rx="10" fill="#e8f0fe" stroke="#1a237e" stroke-width="3"/>
+  <text x="880" y="160" font-size="18" font-weight="bold" fill="#1a237e" text-anchor="middle">ESP32-C3</text>
+  <text x="880" y="184" font-size="18" font-weight="bold" fill="#1a237e" text-anchor="middle">SuperMini</text>
+  <circle cx="720" cy="190" r="5" fill="#111"/>
+  <text x="735" y="194" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">GPIO 5 = TX (to DFPlayer RX)</text>
+  <circle cx="720" cy="230" r="5" fill="#111"/>
+  <text x="735" y="234" font-size="12" font-weight="bold" fill="#0d47a1" text-anchor="start">GPIO 6 = RX (from DFPlayer TX)</text>
+  <circle cx="720" cy="270" r="5" fill="#111"/>
+  <text x="735" y="274" font-size="12" font-weight="bold" fill="#0d47a1" text-anchor="start">GPIO 3 = BUSY (from DFPlayer)</text>
+  <circle cx="900" cy="120" r="5" fill="#c62828"/>
+  <text x="912" y="114" font-size="12" font-weight="bold" fill="#c62828" text-anchor="start">5 V</text>
+  <circle cx="900" cy="440" r="5" fill="#111"/>
+  <text x="912" y="436" font-size="12" font-weight="bold" fill="#111" text-anchor="start">GND</text>
+  <polyline points="720,190 570,190" fill="none" stroke="#b45309" stroke-width="3"/>
+  <rect x="480" y="179" width="60" height="22" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="510" y="174" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">1 kΩ</text>
+  <polyline points="450,190 400,190" fill="none" stroke="#b45309" stroke-width="3"/>
+  <polyline points="400,230 450,230" fill="none" stroke="#0d47a1" stroke-width="3"/>
+  <rect x="480" y="219" width="60" height="22" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="510" y="214" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">1 kΩ</text>
+  <polyline points="570,230 720,230" fill="none" stroke="#0d47a1" stroke-width="3"/>
+  <polyline points="400,270 450,270" fill="none" stroke="#0d47a1" stroke-width="3"/>
+  <rect x="480" y="259" width="60" height="22" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="510" y="254" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">1 kΩ</text>
+  <polyline points="570,270 720,270" fill="none" stroke="#0d47a1" stroke-width="3"/>
+  <rect x="40" y="600" width="1020" height="190" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="3"/>
+  <text x="58" y="628" font-size="15" font-weight="bold" fill="#222" text-anchor="start">Notes</text>
+  <text x="58" y="652" font-size="13" font-weight="normal" fill="#333" text-anchor="start">Power: the DFPlayer runs from 5 V (the SuperMini's 5 V pin on USB, or a 5 V supply rated for about 1 A), not from the C3's 3.3 V regulator. Join the grounds.</text>
+  <text x="58" y="676" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The C3's pins are not 5 V tolerant. Each DFPlayer -> ESP line goes through 1 kΩ, which limits the current into the pin's protection diode.</text>
+  <text x="58" y="700" font-size="13" font-weight="normal" fill="#333" text-anchor="start">BUSY: no voltage divider or pull-down. It is an input with the internal pull-up, so an idle (high) BUSY reads high.</text>
+  <text x="58" y="724" font-size="13" font-weight="normal" fill="#333" text-anchor="start">ESP TX -> DFPlayer RX also has 1 kΩ, which reduces hiss (optional on the BANGER, drawn here).</text>
+  <text x="58" y="752" font-size="13" font-weight="bold" fill="#b45309" text-anchor="start">To confirm by measuring (not yet done): with a multimeter, the DFPlayer's TX and BUSY high level at 5 V, and the C3 pin voltage with the resistor in place (should stay below about 3.6 V).</text>
+  <text x="58" y="776" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The DFPlayer's line-out (DAC_R / DAC_I) is not connected. Fed to an amplifier with its own volume knob, it would give a separate line-out level (see README).</text>
+</svg>

@@ -43,10 +43,12 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - The BANGER tells it when each sound starts (`SND1`, `SND2`, sent just before the BANGER plays the sound). The BANGER still plays both sounds itself, and it does not wait for the box, so the show runs the same if the box is off, out of range or broken
 - Repeated `SND` copies within 1 s are ignored
 - Needs its own DFPlayer, speaker, 5 V supply and an SD card with the same two files
+- Put 1 kΩ in series on each DFPlayer -> C3 line (TX and BUSY) and on C3 -> DFPlayer RX. The C3 pins are not 5 V tolerant. Do not put a pull-down divider on BUSY: it needs the C3's internal pull-up to read idle high
 - Power the DFPlayer from **5 V**, not from the C3's 3.3 V regulator. The C3's Wi-Fi transmit peaks draw from that regulator too; a 3 W speaker on the same rail makes it sag, which can reset the C3 or distort the sound. Use the SuperMini's 5 V pin (USB) or a 5 V supply, with the grounds joined.
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.explosion]`, `python3 bang.py deploy explosion`, then `python3 bang.py deploy banger` (the BANGER needs the box's MAC at build time)
 - To turn it off: unpower it. No rebuild needed
-- Status: firmware written, not yet flashed or tested. Its schematic is not drawn yet
+- Wiring: `docs/explosion_schematic.svg`. The C3 pins are TX GPIO 5, RX GPIO 6, BUSY GPIO 3 (UART1)
+- Status: working on the bench with the DFPlayer on 5 V. The 1 kΩ values and the BUSY idle level are not measured yet
 
 ## Build Commands
 
@@ -81,6 +83,7 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 | `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
 | `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button (redrawn from `button_schema.jpeg`) |
 | `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
+| `docs/explosion_schematic.svg` | EXPLOSION (optional): C3 SuperMini, DFPlayer Mini on 5 V, 3 W speaker, 1 kΩ on the DFPlayer lines |
 
 ## LED Strip Layout
 
@@ -93,7 +96,7 @@ One 5 m WS2812B strip (60 LED/m = 300 LEDs) on GPIO 4, cut logically in two part
 
 The fuse enters the ring at LED 120 and LED 299 sits right next to it (keep a normal LED pitch at that joint). Put that joint on the audience side: the fire races around both arms and meets behind the vampire. To change the ring size, only change `LINE_END` and `RING_START`; everything else is computed from them.
 
-Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and a 1000 uF electrolytic capacitor (10-16 V rated, + to 5 V) across 5 V / GND at the strip start (see `docs/banger_schematic.svg`). The 330 ohm protects the first LED, the capacitor absorbs the current steps of the white flash. A 74AHCT125 level shifter on the data line is the proper fix if the first LEDs flicker, since the ESP32 outputs 3.3 V and a 5 V WS2812B formally wants about 3.5 V. The 1 kohm in the DFPlayer RX line is optional (can reduce hiss).
+Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and a 1000 uF electrolytic capacitor (10-16 V rated, + to 5 V) across 5 V / GND at the strip start (see `docs/banger_schematic.svg`). The 330 ohm protects the first LED, the capacitor absorbs the current steps of the white flash. A 74AHCT125 level shifter on the data line is the proper fix if the first LEDs flicker, since the ESP32 outputs 3.3 V and a 5 V WS2812B formally wants about 3.5 V. The DFPlayer runs from 5 V, so its TX and BUSY lines each need 1 kohm in series (required; the ESP pins are not 5 V tolerant). No pull-down on BUSY. The 1 kohm on ESP TX -> DFPlayer RX is optional (can reduce hiss).
 
 ## Strobe LED (BANGER)
 

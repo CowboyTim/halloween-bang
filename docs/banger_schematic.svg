@@ -62,11 +62,18 @@
   <rect x="345" y="332" width="90" height="72" rx="6" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="7 4"/>
   <text x="390" y="344" font-size="10" font-weight="bold" fill="#777" text-anchor="middle">OPTIONAL</text>
   <text x="390" y="360" font-size="13" font-weight="bold" fill="#1b5e20" text-anchor="middle">1 kohm</text>
+  <!-- DFPlayer outputs run at 5 V: 1 kohm in series is required (C3/S3 pins are not 5 V tolerant) -->
   <circle cx="300" cy="430" r="5" fill="#6a1b9a"/>
-  <line x1="300" y1="430" x2="500" y2="430" stroke="#6a1b9a" stroke-width="4"/>
+  <line x1="300" y1="430" x2="360" y2="430" stroke="#6a1b9a" stroke-width="4"/>
+  <rect x="360" y="416" width="60" height="28" fill="#fff" stroke="#b45309" stroke-width="3"/>
+  <text x="390" y="410" font-size="11" font-weight="bold" fill="#b45309" text-anchor="middle">1 kohm</text>
+  <line x1="420" y1="430" x2="500" y2="430" stroke="#6a1b9a" stroke-width="4"/>
   <circle cx="300" cy="480" r="5" fill="#ef6c00"/>
-  <line x1="300" y1="480" x2="500" y2="480" stroke="#ef6c00" stroke-width="4"/>
-  <text x="400" y="472" font-size="11" fill="#e65100" text-anchor="middle">low while playing</text>
+  <line x1="300" y1="480" x2="360" y2="480" stroke="#ef6c00" stroke-width="4"/>
+  <rect x="360" y="466" width="60" height="28" fill="#fff" stroke="#b45309" stroke-width="3"/>
+  <text x="390" y="460" font-size="11" font-weight="bold" fill="#b45309" text-anchor="middle">1 kohm</text>
+  <line x1="420" y1="480" x2="500" y2="480" stroke="#ef6c00" stroke-width="4"/>
+  <text x="400" y="512" font-size="11" fill="#e65100" text-anchor="middle">low while playing</text>
   <!-- speaker -->
   <polyline points="200,550 200,640" fill="none" stroke="#444" stroke-width="3.5"/>
   <polyline points="260,550 260,640" fill="none" stroke="#444" stroke-width="3.5"/>
@@ -175,7 +182,7 @@
   <rect x="30" y="965" width="1240" height="80" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <rect x="46" y="979" width="46" height="24" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
   <text x="104" y="996" font-size="13" fill="#333">dashed = optional part.</text>
-  <text x="300" y="996" font-size="13" fill="#333">Serial: ESP TX (GPIO 12) goes to the DFPlayer RX through 1 kohm, DFPlayer TX goes to ESP RX (GPIO 13). The 1 kohm is optional (can reduce hiss).</text>
+  <text x="300" y="996" font-size="13" fill="#333">DFPlayer TX (to GPIO 13) and BUSY (to GPIO 7) each need 1 kohm in series (DFPlayer on 5 V). ESP TX (GPIO 12) to DFPlayer RX: 1 kohm optional (reduces hiss).</text>
   <text x="46" y="1020" font-size="13" fill="#333">The strobe supply shares GND with the ESP32 and nothing else. Aim the strobe at the ring or smoke, never at people's eyes (flashes at 8-10 Hz).</text>
   <text x="46" y="1038" font-size="12" fill="#555">Strobe alternative without the module: a logic-level N-MOSFET (IRLZ44N): GPIO 5, then 100-220 ohm to the gate, 10 kohm gate to GND, source to GND, drain to LED -.</text>
 </svg>
