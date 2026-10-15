@@ -18,23 +18,25 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Can trigger other BANGER devices wirelessly
 - "BANG" is sent 3 times (`BANG_REPEATS`) in case a packet is lost; the BANGER plays one show only
 - Works on its own: boots **READY** and is READY again after every show (no KILLSWITCH needed)
-- Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it. After every show it is LOCKED again (so nobody presses twice), but only as a **cooldown**: `COOLDOWN_AFTER_SHOW_MS` (30 s) later it unlocks by itself, so a lost ARM never leaves it dead. A LOCK from the actor (also during the show) holds it locked until the next ARM. A power cycle of the BUTTON unit forgets the guard.
+- Only while the actor holds the KILLSWITCH down is it **LOCKED** (lamp dark, presses thrown away). Release = READY at once. The lock also ends by itself 1 s after the KILLSWITCH stops sending (lost, out of range, flat battery) and after 15 s at most (`LOCK_MAX_MS`), even if the KILLSWITCH is still held
 - The arcade button lamp is a 12 V LED with a 470 ohm series resistor inside (about 20 mA), driven low-side by a 2N2222 on GPIO 7; see `docs/button_schematic.svg`
-- Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
+- Lamp (PWM): LOCKED = dark, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
 - Use: `python3 bang.py deploy button`
 - Status: built, flashed and working on the real board together with the BANGER
 
 ### KILLSWITCH Mode (optional)
-- A small ESP32-C3 SuperMini with one push button and one status LED, carried by the actor (was planned on an ESP32-S3 SuperMini; the firmware builds for the C3, but its pins are not yet checked for the C3: GPIO 8 is a boot-strapping pin and the on-board LED there)
-- **Tap = LOCK** (BUTTON locks immediately), **hold 1 s = ARM** (BUTTON goes COUNTDOWN, after `ARM_DELAY_MS` = 10 s and a released button it is READY)
-- ARM/LOCK are broadcast (no MAC needed) and sent 3x; the BUTTON reports its state (`S0`..`S3`) every second, so the LED shows: 2 quick blinks = no link, 1 blink/2 s = locked, 4 blinks/s = countdown, solid = ready, fast flicker = show
-- Optional: skip it and everything works as before. Tap it once and the button is guarded.
-- Guarded mode is fail-safe (a lost ARM or a reboot of the KILLSWITCH leaves the button locked), but the very first LOCK is the one that must arrive: it is sent 3x, and the LED shows READY (solid) if it did not, so check it after tapping
+- A small ESP32-C3 SuperMini with one push button, carried by the actor. The on-board BOOT button works as the push button too, so a bare board is enough to try it
+- **Hold = the BUTTON is locked, release = it works again at once.** A push button or a switch both work
+- While held it broadcasts "LOCK" every 150 ms (no MAC needed); on release it sends "FREE" 3x. The BUTTON stays locked only while LOCKs keep arriving, so a lost message, a reset or a flat battery unlocks it within 1 s
+- A lock lasts at most 15 s (`LOCK_MAX_MS`), even if the switch is left on: then the KILLSWITCH LED blinks fast; release it (and hold again) to lock again
+- The KILLSWITCH only sends. Its on-board blue LED: on while held, fast blink = lock expired, 1 blink at power-up. Whether the button is locked, the actor sees on the BUTTON's own lamp (dark = locked)
+- Optional: skip it and everything works as before
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
-- Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
+- Wiring: GPIO 3 = button to GND (internal pull-up), nothing else. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
 - Use: `python3 bang.py identify <port>`, add its MAC to `boards.toml`, then `python3 bang.py deploy killswitch`
-- Power: the KILLSWITCH runs fine from a USB power bank, or from a LiPo on the board's `B+` / `B-` pads (see "Battery power" below)
-- Status: logic tested on a PC mock only, not yet compiled/flashed on a real board (the BUTTON side is). The countdown display on the BUTTON is planned for later.
+- The C3 sends at 8.5 dBm instead of 20 dBm: the C3 SuperMini's small antenna garbles about half the packets at full power (measured). Check the range at the real distance
+- Power: a USB power bank. Most C3 SuperMini boards have no LiPo charger or `B+` / `B-` pads (see "Battery power" below)
+- Status: flashed on the ESP32-C3 SuperMini, tested with the on-board BOOT button
 
 ## Build Commands
 
@@ -68,7 +70,7 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 | `docs/system_overview.svg` | the three units, the messages between them, the BUTTON states |
 | `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
 | `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button (redrawn from `button_schema.jpeg`) |
-| `docs/killswitch_schematic.svg` | KILLSWITCH (optional): SuperMini, push button, status LED |
+| `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
 
 ## LED Strip Layout
 
@@ -166,7 +168,7 @@ This converts to 44.1kHz, 192kbps constant bitrate MP3 compatible with the DFPla
 
 ### Board GPIO Pinouts
 - **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 12/13 (DFPlayer TX/RX), GPIO 7 (BUSY pin), GPIO 21 (builtin LED), GPIO 8 (button input pullup)
-- **KILLSWITCH mode**: **ESP32-C3 SuperMini** - GPIO 8 button, GPIO 7 status LED (pins still from the S3 SuperMini plan, not yet checked for the C3)
+- **KILLSWITCH mode**: **ESP32-C3 SuperMini** - GPIO 3 button (and the on-board BOOT button, GPIO 9), on-board blue LED (GPIO 8). Avoid GPIO 2/8/9 (strapping), 12-17 (flash), 18/19 (USB), 20/21 (serial). An S3 build keeps GPIO 8 button / GPIO 7 LED
 - **BUTTON mode**: Requires **ESP32 S3 SuperMini** - same GPIO assignments for button input and ESP-NOW communication
 
 ### Why these boards?

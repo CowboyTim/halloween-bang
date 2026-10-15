@@ -46,11 +46,34 @@
 #define BUTTON_PIN          GPIO_NUM_8  // on BUTTON
 #define LED_12V_PIN         GPIO_NUM_7  // on BUTTON
 
+// KILLSWITCH pins, per chip. The unit needs no LED of its own: the board's built-in LED shows
+// that a press was seen and sent; the BUTTON's lamp shows the actor what the button is doing.
+#if CONFIG_IDF_TARGET_ESP32C3
+// ESP32-C3 SuperMini. Not usable: 2/8/9 strapping (8 = built-in LED, 9 = BOOT button),
+// 12-17 SPI flash, 18/19 USB, 20/21 UART0. Free: 0, 1, 3, 4, 5, 6, 7, 10.
+#define KILL_BUTTON_PIN     GPIO_NUM_3  // external push button to GND (internal pull-up)
+#define KILL_BOOT_PIN       GPIO_NUM_9  // on-board BOOT button works too (held while powering up = flash mode)
+#define KILL_LED_PIN        GPIO_NUM_8  // built-in blue LED
+#define KILL_LED_ON         LOW         // it is lit when the pin is LOW
+// The C3 SuperMini's antenna garbles packets at full power: at 20 dBm about half the LOCKs
+// arrived, at 8.5 dBm all of them (measured at the BUTTON, 2026-10-15).
+#define KILL_TX_POWER       WIFI_POWER_8_5dBm
+#else
+// ESP32-S3 SuperMini
+#define KILL_BUTTON_PIN     GPIO_NUM_8  // push button to GND (internal pull-up)
+#define KILL_BOOT_PIN       GPIO_NUM_0  // on-board BOOT button works too
+#define KILL_LED_PIN        GPIO_NUM_7  // optional LED, 330 ohm to GND
+#define KILL_LED_ON         HIGH
+#endif
+
 #define WAIT_TIME_BUTTON    16000       // configurable wait time (ms) for button mode - time of animation the banger is showing (whole show is ~14.5s: 0001.mp3 10.3s + 0002.mp3 4.0s)
 
 #define IS_BUTTON     1
 #define IS_BANGER     2
 #define IS_KILLSWITCH 3
+#if CONFIG_IDF_TARGET_ESP32C3 && (defined(BANGER) || defined(BUTTON))
+#error "BANGER and BUTTON pins are for the ESP32-S3 (GPIO 12/13 are flash pins on the C3); only KILLSWITCH has C3 pins"
+#endif
 #ifdef BUTTON
 uint8_t WHAT = IS_BUTTON;
 #endif
@@ -213,13 +236,9 @@ void setup_cpu_speed(uint32_t freq_mhz = 160) {
 // ==== MESSAGES BEGIN ====
 // ESP-NOW messages (exact match, the payload is not NUL terminated):
 //   "BANG"      BUTTON     -> BANGER      start the show
-//   "ARM"       KILLSWITCH -> BUTTON      start the arming countdown
-//   "LOCK"      KILLSWITCH -> BUTTON      lock the button again
-//   "S0".."S3"  BUTTON     -> KILLSWITCH  button state (LOCKED, COUNTDOWN, READY, SHOW)
-volatile uint8_t  arm_requested   = 0;   // BUTTON: "ARM" received
-volatile uint8_t  lock_requested  = 0;   // BUTTON: "LOCK" received
-volatile uint8_t  remote_state    = 0;   // KILLSWITCH: last state reported by the BUTTON
-volatile uint32_t remote_state_ms = 0;   // KILLSWITCH: millis() of that report (0 = never)
+//   "LOCK"      KILLSWITCH -> BUTTON      repeated while the killswitch is held: keep the button locked
+//   "FREE"      KILLSWITCH -> BUTTON      killswitch released: unlock now (else the lock times out)
+volatile uint32_t lock_seen_ms    = 0;   // BUTTON: millis() of the last "LOCK" (0 = none / freed)
 uint8_t broadcastAddress[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 static bool msg_is(const uint8_t *msg, int len, const char *s) {
@@ -229,14 +248,11 @@ static bool msg_is(const uint8_t *msg, int len, const char *s) {
 void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
   if(msg_is(msg, len, "BANG")) {
     trigger_animation = 1;
-  } else if(msg_is(msg, len, "ARM")) {
-    arm_requested = 1;
   } else if(msg_is(msg, len, "LOCK")) {
-    lock_requested = 1;
-  } else if(len == 2 && msg[0] == 'S' && msg[1] >= '0' && msg[1] <= '3') {
-    remote_state = msg[1] - '0';
-    remote_state_ms = millis();
-    if(!remote_state_ms) remote_state_ms = 1;
+    uint32_t t = millis();
+    lock_seen_ms = t ? t : 1;
+  } else if(msg_is(msg, len, "FREE")) {
+    lock_seen_ms = 0;
   }
 }
 // ==== MESSAGES END ====
@@ -268,34 +284,36 @@ void IRAM_ATTR button_pressed() {
 
 // ==== BUTTON / KILLSWITCH BEGIN ====
 // -------------------------------------------------------------------------
-//  Three units talk over ESP-NOW. ARM / LOCK / status use broadcast, so there are no extra
-//  MAC addresses to configure:
+//  Three units talk over ESP-NOW. LOCK / FREE use broadcast, so the KILLSWITCH needs no MAC
+//  address. The BUTTON sends nothing back: its lamp shows the actor what it is doing.
 //
-//    KILLSWITCH --"ARM" / "LOCK"-->  BUTTON  --"BANG"-->  BANGER
-//    KILLSWITCH <--"S0".."S3"-----   BUTTON  (its state, repeated every second)
+//    KILLSWITCH --"LOCK" (while held) / "FREE"-->  BUTTON  --"BANG"-->  BANGER
 //
-//  The KILLSWITCH is OPTIONAL. Without one (or until its button is first pressed) the BUTTON
-//  just works: it boots READY and is READY again after every show.
-//  The first LOCK from a KILLSWITCH "guards" the button: from then on it only works after the
-//  actor ARMs it (and goes back to LOCKED after every show), so kids cannot start the show
-//  while the actor is still busy. A reboot of the BUTTON unit forgets the guard (back to READY).
+//  The BUTTON always works, except while the actor holds the KILLSWITCH button down (or a
+//  switch-style button is closed). While held, the KILLSWITCH repeats "LOCK" every
+//  KILL_LOCK_PERIOD_MS and the BUTTON stays LOCKED as long as a LOCK arrived within the last
+//  LOCK_TIMEOUT_MS. Release sends "FREE" (KILL_REPEATS times) so it is READY again at once.
+//  If those are lost, or the KILLSWITCH resets, goes out of range or runs flat, the lock just
+//  times out: a missing message can never keep the button locked. No KILLSWITCH = never locked.
+//  A lock also ends by itself after LOCK_MAX_MS, even while still held (a switch left on):
+//  the BUTTON then ignores LOCK until the killswitch is released, and the KILLSWITCH stops
+//  sending LOCK and blinks fast ("expired, release it").
 //
 //  Button states:
-//    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY          (not guarded)
-//    LOCK (from anywhere, also during SHOW) -> guarded; READY / COUNTDOWN -> LOCKED
-//    guarded: LOCKED --ARM--> COUNTDOWN --(ARM_DELAY_MS)--> READY --press--> SHOW --> LOCKED
-//    after a show the lock is only a cooldown: COOLDOWN_AFTER_SHOW_MS later (30 s) the button
-//    is READY again by itself, so a lost ARM never leaves it dead. A LOCK from the actor
-//    (during or after the show) holds the button locked until the next ARM instead.
+//    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY (LOCKED if still held)
+//    READY --LOCK--> LOCKED --(FREE, no LOCK for LOCK_TIMEOUT_MS or LOCK_MAX_MS; button released)--> READY
+//    A LOCK during SHOW does not stop the show (it already runs on the BANGER).
 //    Presses in any state except READY are thrown away.
 //
-//  KILLSWITCH unit: ONE push button. Hold it ARM_HOLD_MS = ARM, a short tap = LOCK (so an
-//  accidental tap locks, it can never arm). Its LED shows what the BUTTON is doing.
+//  KILLSWITCH unit: ONE push button or switch. Its built-in LED is on while it is held (the
+//  button is being locked), blinks fast once LOCK_MAX_MS has run out, and blinks once at power-up.
 // -------------------------------------------------------------------------
 
-#define ARM_DELAY_MS           10000   // after ARM: this long until the button works (0 = at once)
-#define COOLDOWN_AFTER_SHOW_MS 30000   // guarded: this long after a show the button unlocks by itself (an ARM may have been lost; 0 = stay locked until ARM)
-#define AUTO_REARM_AFTER_SHOW  0       // 1 = a new countdown starts by itself after each show, 0 = stay locked until re-armed
+#define LOCK_TIMEOUT_MS        1000    // BUTTON: LOCKED until no "LOCK" arrived for this long
+#define KILL_LOCK_PERIOD_MS    150     // KILLSWITCH: "LOCK" is repeated this often while held (several may get lost)
+#ifndef LOCK_MAX_MS
+#define LOCK_MAX_MS            15000   // a lock ends by itself after this long, even if the killswitch stays held
+#endif
 
 // BUTTON lamp (12 V via the 2N2222 on LED_12V_PIN, PWM)
 #define LAMP_PWM_FREQ          2000    // Hz
@@ -305,35 +323,20 @@ void IRAM_ATTR button_pressed() {
 #define LAMP_BREATH_PERIOD_MS  3000    // one breath in and out
 #define LAMP_SHOW_PERIOD_MS    100     // flicker while the show runs (half on, half off)
 
-#define STATUS_PERIOD_MS       1000    // BUTTON repeats its state at least this often
-#define STATUS_TIMEOUT_MS      3500    // KILLSWITCH: no state for this long = "no link"
-
-// KILLSWITCH unit
-#define ARM_HOLD_MS            1000    // hold this long to ARM, a shorter tap sends LOCK
+// KILLSWITCH / BUTTON sends
 #define BANG_REPEATS           3       // BUTTON -> BANGER: "BANG" is sent this many times, the BANGER starts one show only
 #define BANG_REPEAT_GAP_MS     60
-#define KILL_REPEATS           3       // every command is sent this many times (broadcast has no retries)
+#define KILL_REPEATS           3       // "FREE" is sent this many times (broadcast has no retries)
 #define KILL_REPEAT_GAP_MS     60
-#define KILL_LED_PIN           GPIO_NUM_7   // on KILLSWITCH: status LED, 330 ohm to GND
+#define KILL_BLINK_MS          300     // KILLSWITCH LED: the power-up blink
 
-enum { BS_LOCKED = 0, BS_COUNTDOWN = 1, BS_READY = 2, BS_SHOW = 3 };
-#define STATE_NO_LINK          99
-
-static inline float clamp01(float x) { return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x); }
+enum { BS_LOCKED = 0, BS_READY = 2, BS_SHOW = 3 };
 
 // Lamp brightness (0-255) for a button state; ms = time since that state began.
 uint8_t lamp_level(uint8_t state, uint32_t ms) {
   switch (state) {
     case BS_LOCKED:
       return LAMP_LOCKED_LEVEL;
-    case BS_COUNTDOWN: {
-      // "waking up": random flicker that gets brighter towards the end of the countdown
-      float prog  = ARM_DELAY_MS ? clamp01((float)ms / ARM_DELAY_MS) : 1.0f;
-      uint32_t h  = (ms / 70) * 2654435761u;                  // a new random value every 70 ms
-      float flick = 0.2f + 0.8f * ((h >> 24) / 255.0f);
-      float base  = 0.2f + 0.6f * prog;
-      return (uint8_t)(255.0f * base * flick);
-    }
     case BS_READY: {
       // slow breathing = "press me"; b*b approximates the eye's brightness curve
       float b = 0.5f - 0.5f * cosf(2.0f * PI * (float)(ms % LAMP_BREATH_PERIOD_MS) / LAMP_BREATH_PERIOD_MS);
@@ -346,42 +349,30 @@ uint8_t lamp_level(uint8_t state, uint32_t ms) {
 }
 
 // ---- BUTTON unit ---------------------------------------------------------
-uint8_t  bstate            = BS_READY;   // works out of the box; a KILLSWITCH LOCK guards it
-uint8_t  hold_lock         = 0;          // 1 = the actor locked it: no automatic unlock, only ARM
-uint8_t  guarded           = 0;          // 1 after the first LOCK: needs ARM before every show
+uint8_t  bstate            = BS_READY;   // works out of the box
 uint32_t bstate_since      = 0;
 uint32_t button_high_since = 0;     // millis() since the button was last seen released (0 = pressed now)
 uint32_t last_lamp_ms      = 0;
-uint32_t last_status_ms    = 0;
-uint8_t  status_dirty      = 1;
 uint8_t  bang_repeats_left = 0;     // BANG copies still to send
 uint32_t bang_next_ms      = 0;
+uint32_t lock_stream_since = 0;     // millis() when the current run of LOCKs began (0 = none)
+uint8_t  lock_expired      = 0;     // 1 = this run of LOCKs lasted LOCK_MAX_MS: ignored until released
 
 void button_set_state(uint8_t s) {
   if (s == bstate) return;
   LOG("BUTTON state %d -> %d", bstate, s);
   bstate       = s;
   bstate_since = millis();
-  status_dirty = 1;
-}
-
-void send_status() {
-  char msg[2] = {'S', (char)('0' + bstate)};
-  esp_now_send(broadcastAddress, (uint8_t *)msg, 2);
-  last_status_ms = millis();
-  status_dirty   = 0;
 }
 
 void button_setup(){
-  // peers: the BANGER (gets "BANG") and broadcast (state for the KILLSWITCH)
+  // peer: the BANGER (gets "BANG")
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, receiverAddress, 6);
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
   esp_now_add_peer(&peerInfo);
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  esp_now_add_peer(&peerInfo);
-  // "ARM" and "LOCK" come from the KILLSWITCH
+  // "LOCK" and "FREE" come from the KILLSWITCH
   esp_now_register_recv_cb(OnDataRecv);
 
   LOG("button INPUT_PULLUP PIN: %d", BUTTON_PIN);
@@ -401,14 +392,26 @@ void button_setup(){
 void do_button_loop(){
   uint32_t now = millis();
 
-  // Inputs. Everything queued is consumed on every pass, so nothing piles up while it is not
-  // its turn (a press during LOCKED / COUNTDOWN / SHOW is simply gone).
-  uint8_t pressed, arm, lock;
+  // Inputs. A queued press is consumed on every pass, so nothing piles up while it is not
+  // its turn (a press during LOCKED / SHOW is simply gone).
+  uint8_t pressed;
   portENTER_CRITICAL(&r_mux);
   pressed = button_was_pressed;  button_was_pressed = 0;
-  arm     = arm_requested;       arm_requested      = 0;
-  lock    = lock_requested;      lock_requested     = 0;
   portEXIT_CRITICAL(&r_mux);
+  // signed: the callback may have stored a millis() a little newer than "now"
+  uint32_t lock_ms = lock_seen_ms;
+  bool held = lock_ms && (int32_t)(now - lock_ms) < LOCK_TIMEOUT_MS;
+  // a lock never lasts longer than LOCK_MAX_MS, however long the killswitch is held
+  if (!held) {
+    lock_stream_since = 0;
+    lock_expired      = 0;
+  } else if (!lock_stream_since) {
+    lock_stream_since = now ? now : 1;
+  } else if (!lock_expired && now - lock_stream_since >= LOCK_MAX_MS) {
+    LOG("killswitch held for %d s: lock expired, ignored until it is released", LOCK_MAX_MS / 1000);
+    lock_expired = 1;
+  }
+  if (lock_expired) held = false;
 
   // button released for at least 50 ms (a button that is held down must be let go first)
   if (digitalRead(BUTTON_PIN) == HIGH) {
@@ -418,36 +421,21 @@ void do_button_loop(){
   }
   bool released = button_high_since && (now - button_high_since >= 50);
 
-  if (lock) {
-    if (!guarded) LOG("BUTTON now guarded by the KILLSWITCH");
-    guarded   = 1;
-    hold_lock = 1;     // an explicit LOCK holds until the actor ARMs
-  }
-
   switch (bstate) {
     case BS_LOCKED:
-      if (arm) {
-        hold_lock = 0;
-        button_set_state(BS_COUNTDOWN);
-      } else if (!hold_lock && COOLDOWN_AFTER_SHOW_MS && now - bstate_since >= COOLDOWN_AFTER_SHOW_MS) {
-        LOG("cooldown over, unlocking by itself");
-        button_set_state(BS_READY);
-      }
-      break;
-    case BS_COUNTDOWN:
-      if (lock) {
-        button_set_state(BS_LOCKED);
-      } else if (now - bstate_since >= ARM_DELAY_MS && released) {
+      if (!held && released) {
         // a press has to start while READY, so a press that is still going on does not count
         portENTER_CRITICAL(&r_mux);
         button_was_pressed = 0;
         portEXIT_CRITICAL(&r_mux);
+        LOG("killswitch released, button works again");
         button_set_state(BS_READY);
       }
       break;
     case BS_READY:
-      if (lock) {
-        button_set_state(BS_LOCKED);   // (arm is ignored: nothing to arm)
+      if (held) {
+        LOG("killswitch held, button locked");
+        button_set_state(BS_LOCKED);
       } else if (pressed) {
         LOG("ADHD style sending BANG");
         bang_repeats_left = BANG_REPEATS;   // sent below, a few times in a row
@@ -456,11 +444,9 @@ void do_button_loop(){
       }
       break;
     case BS_SHOW:
-      // the show runs on the BANGER; this is just a timer (ARM is ignored meanwhile, a LOCK is remembered)
+      // the show runs on the BANGER; this is just a timer
       if (now - bstate_since >= WAIT_TIME_BUTTON) {
-        if (!guarded)                button_set_state(BS_READY);
-        else if (AUTO_REARM_AFTER_SHOW && !hold_lock) button_set_state(BS_COUNTDOWN);
-        else                         button_set_state(BS_LOCKED);
+        button_set_state(held ? BS_LOCKED : BS_READY);
       }
       break;
   }
@@ -482,39 +468,22 @@ void do_button_loop(){
     last_lamp_ms = now;
     ledcWrite(LED_12V_PIN, lamp_level(bstate, now - bstate_since));
   }
-  if (status_dirty || now - last_status_ms >= STATUS_PERIOD_MS) {
-    send_status();
-  }
   delay(2);
 }
 
 // ---- KILLSWITCH unit -----------------------------------------------------
-uint8_t     ks_stable       = HIGH;   // debounced button level (LOW = pressed)
+uint8_t     ks_stable       = HIGH;   // debounced button level (LOW = held)
 uint8_t     ks_raw_last     = HIGH;
 uint32_t    ks_raw_since    = 0;
-uint32_t    ks_pressed_since = 0;     // millis() when the current press began
-uint8_t     ks_hold_sent    = 0;      // ARM already sent for this press
-const char *ks_msg          = NULL;   // command being repeated
-uint8_t     ks_repeats_left = 0;
-uint32_t    ks_next_send_ms = 0;
+uint32_t    ks_next_lock_ms = 0;      // when the next "LOCK" goes out (while held)
+uint8_t     ks_free_left    = 0;      // "FREE" copies still to send (after release)
+uint32_t    ks_next_free_ms = 0;
+uint32_t    ks_blink_until  = 0;      // power-up blink
+uint32_t    ks_held_since   = 0;      // millis() when the current hold began
+uint8_t     ks_expired      = 0;      // 1 = held for LOCK_MAX_MS: LOCK stopped until released
 
-void ks_queue(const char *m) {
-  ks_msg          = m;
-  ks_repeats_left = KILL_REPEATS;
-  ks_next_send_ms = millis();
-  LOG("KILLSWITCH sends %s", m);
-}
-
-// LED pattern for the state the BUTTON reports (on = 1)
-uint8_t killswitch_led_on(uint8_t state, uint32_t ms) {
-  switch (state) {
-    case BS_LOCKED:    return (ms % 2000) < 100;                  // one short blink every 2 s
-    case BS_COUNTDOWN: return (ms % 250) < 125;                   // fast blink: counting down
-    case BS_READY:     return 1;                                  // solid: the button is live
-    case BS_SHOW:      return (ms % 100) < 50;                    // flicker: the show is running
-  }
-  uint32_t p = ms % 2000;                                         // anything else = no link: two quick blinks
-  return (p < 80) || (p >= 160 && p < 240);
+void ks_send(const char *m) {
+  esp_now_send(broadcastAddress, (const uint8_t *)m, strlen(m));
 }
 
 void killswitch_setup(){
@@ -523,52 +492,69 @@ void killswitch_setup(){
   peerInfo.channel = 0;
   peerInfo.encrypt = false;
   esp_now_add_peer(&peerInfo);
-  // the BUTTON reports its state
-  esp_now_register_recv_cb(OnDataRecv);
 
-  LOG("killswitch INPUT_PULLUP PIN: %d, LED PIN: %d", BUTTON_PIN, KILL_LED_PIN);
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  LOG("killswitch INPUT_PULLUP PINS: %d + BOOT %d, LED PIN: %d", KILL_BUTTON_PIN, KILL_BOOT_PIN, KILL_LED_PIN);
+  pinMode(KILL_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(KILL_BOOT_PIN, INPUT_PULLUP);
   pinMode(KILL_LED_PIN, OUTPUT);
-  digitalWrite(KILL_LED_PIN, LOW);
+  digitalWrite(KILL_LED_PIN, !KILL_LED_ON);
+  ks_blink_until = millis() + KILL_BLINK_MS;   // one blink at power-up: it is alive
 
   // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
   setup_cpu_speed(80);
+#ifdef KILL_TX_POWER
+  WiFi.setTxPower(KILL_TX_POWER);
+#endif
+  LOG("killswitch Wi-Fi TX power: %d (0.25 dBm units)", (int)WiFi.getTxPower());
 }
 
 void do_killswitch_loop(){
   uint32_t now = millis();
 
-  // debounce: the level must stay the same for 30 ms
-  uint8_t raw = digitalRead(BUTTON_PIN);
+  // debounce: the level must stay the same for 30 ms.
+  // The external button and the BOOT button do the same (LOW = held).
+  uint8_t raw = (digitalRead(KILL_BUTTON_PIN) == LOW || digitalRead(KILL_BOOT_PIN) == LOW) ? LOW : HIGH;
   if (raw != ks_raw_last) {
     ks_raw_last  = raw;
     ks_raw_since = now;
   }
   if (raw != ks_stable && now - ks_raw_since >= 30) {
     ks_stable = raw;
-    if (ks_stable == LOW) {                         // pressed
-      ks_pressed_since = now ? now : 1;
-      ks_hold_sent     = 0;
-    } else {                                        // released
-      if (!ks_hold_sent) ks_queue("LOCK");          // a tap = LOCK
-      ks_pressed_since = 0;
+    if (ks_stable == LOW) {                         // held: start locking at once
+      LOG("KILLSWITCH held: sending LOCK");
+      ks_free_left    = 0;
+      ks_next_lock_ms = now;
+      ks_held_since   = now;
+      ks_expired      = 0;
+    } else {                                        // released: unlock now
+      LOG("KILLSWITCH released: sending FREE");
+      ks_free_left    = KILL_REPEATS;
+      ks_next_free_ms = now;
+      ks_expired      = 0;
     }
   }
-  if (ks_stable == LOW && !ks_hold_sent && now - ks_pressed_since >= ARM_HOLD_MS) {
-    ks_hold_sent = 1;                               // held long enough = ARM
-    ks_queue("ARM");
+  if (ks_stable == LOW && !ks_expired && now - ks_held_since >= LOCK_MAX_MS) {
+    LOG("KILLSWITCH held for %d s: lock expired, sending FREE (release it to lock again)", LOCK_MAX_MS / 1000);
+    ks_expired      = 1;
+    ks_free_left    = KILL_REPEATS;
+    ks_next_free_ms = now;
   }
 
-  // send the queued command a few times in a row
-  if (ks_repeats_left && now >= ks_next_send_ms) {
-    esp_now_send(broadcastAddress, (const uint8_t *)ks_msg, strlen(ks_msg));
-    ks_repeats_left--;
-    ks_next_send_ms = now + KILL_REPEAT_GAP_MS;
+  if (ks_stable == LOW && !ks_expired && (int32_t)(now - ks_next_lock_ms) >= 0) {
+    ks_send("LOCK");
+    ks_next_lock_ms = now + KILL_LOCK_PERIOD_MS;
+  }
+  if (ks_free_left && (int32_t)(now - ks_next_free_ms) >= 0) {
+    ks_send("FREE");
+    ks_free_left--;
+    ks_next_free_ms = now + KILL_REPEAT_GAP_MS;
   }
 
-  // LED: on while the button is held, otherwise the state the BUTTON reported
-  uint8_t state = (remote_state_ms && now - remote_state_ms < STATUS_TIMEOUT_MS) ? remote_state : STATE_NO_LINK;
-  digitalWrite(KILL_LED_PIN, (ks_stable == LOW) ? 1 : killswitch_led_on(state, now));
+  // LED: on while held (= the button is being locked), fast blink once that has expired,
+  // plus the power-up blink
+  uint8_t on = ks_expired ? (now % 200) < 100
+                          : (ks_stable == LOW) || (int32_t)(ks_blink_until - now) > 0;
+  digitalWrite(KILL_LED_PIN, on ? KILL_LED_ON : !KILL_LED_ON);
   delay(2);
 }
 // ==== BUTTON / KILLSWITCH END ====
@@ -647,7 +633,8 @@ void setup() {
   // builtin LED (fails for the EdSoftLED's use of RMT)
   //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
 
-  if (!rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
+  // only the BANGER has a strip (GPIO 4 is a free pin on the others)
+  if (WHAT == IS_BANGER && !rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
     LOG("init sender failed");
   }
 

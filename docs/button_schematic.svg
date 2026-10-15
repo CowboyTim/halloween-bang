@@ -48,7 +48,7 @@
   <text x="475" y="340" font-size="18" font-weight="bold" fill="#1a237e" text-anchor="middle">ESP32-S3</text>
   <text x="475" y="362" font-size="18" font-weight="bold" fill="#1a237e" text-anchor="middle">SuperMini</text>
   <text x="475" y="396" font-size="12" fill="#444" text-anchor="middle">ESP-NOW: sends "BANG",</text>
-  <text x="475" y="412" font-size="12" fill="#444" text-anchor="middle">gets ARM / LOCK</text>
+  <text x="475" y="412" font-size="12" fill="#444" text-anchor="middle">gets LOCK / FREE</text>
   <text x="475" y="428" font-size="12" fill="#777" text-anchor="middle">runs at 80 MHz</text>
   <circle cx="380" cy="460" r="6" fill="#c62828"/><text x="392" y="465" font-size="13" font-weight="bold" fill="#c62828">5V</text>
   <circle cx="380" cy="520" r="6" fill="#111"/><text x="392" y="525" font-size="13" font-weight="bold" fill="#111">GND</text>

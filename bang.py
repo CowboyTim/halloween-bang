@@ -365,7 +365,8 @@ def flash(board, args):
         + [x for addr, path in bins for x in (addr, path)])
     chip, mac = parse_esptool(out)
     if rc:
-        die(f"flashing {board['name']} on {port} failed (esptool exit {rc})")
+        die(f"flashing {board['name']} on {port} failed (esptool exit {rc}); "
+            f"is a monitor still open on {port}?")
     if board["mac"] and mac and mac != board["mac"]:
         die(f"{port} turned out to be {mac}, not {board['name']} ({board['mac']})")
     print(f"== {board['name']} flashed OK ({chip or '?'}, {mac or '?'})")

@@ -20,6 +20,6 @@ chip = "esp32s3"           # ESP32-S3 SuperMini (soldered in, stays S3)
 role = "BUTTON"
 
 [boards.killswitch]
-mac  = ""                  # not known yet: fill in with "bang.py identify <port>"
+mac  = "64:e8:33:82:fd:a0"
 chip = "esp32c3"           # ESP32-C3 SuperMini
 role = "KILLSWITCH"
