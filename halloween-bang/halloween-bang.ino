@@ -18,13 +18,22 @@
 #endif // UART_LOG_DEV_UART0
 
 #include <stdlib.h>
-#include <EdSoftLED.h>
-#include <esp_now.h>
-#include <WiFi.h>
-#include <esp_wifi.h>
-#include <driver/gpio.h>
-#include <driver/rmt.h>
-#include <esp_task_wdt.h>
+#include "EdSoftLED.h"
+#if defined(ESP8266)
+  #include <ESP8266WiFi.h>
+  #include <espnow.h>
+  #error "This board is not supported or is missing Wi-Fi hardware!"
+#elif defined(ESP32)
+  #include <WiFi.h>
+  #include <esp_wifi.h>
+  #include <esp_now.h>
+  #include <driver/gpio.h>
+  #include <driver/rmt.h>
+  #include <esp_task_wdt.h>
+  // ESP32 fallback if needed
+#else
+  #error "This board is not supported or is missing Wi-Fi hardware!"
+#endif
 
 #include "HardwareSerial.h"
 #include "DFRobotDFPlayerMini.h"
