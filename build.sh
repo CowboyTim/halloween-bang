@@ -1,126 +1,43 @@
 #!/bin/bash
+#
+# Compatibility wrapper around bang.py, which does the real work: it finds
+# each board's serial port by its MAC (boards.toml), so swapped /dev/ttyACM*
+# ports no longer matter.
+#
+#   bash ./build.sh deploy banger button        same as: python3 bang.py deploy banger button
+#   EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER' bash ./build.sh deploy   (old style: role from the flags)
+#
+# Old variables still work: EXTRA_FLAGS, DEBUG=1, DEV_PORT (skips the MAC lookup),
+# ARDUINO_DIRECTORIES_DATA.
 
 HERE=$(dirname $(readlink -f $BASH_SOURCE))
-MODULE=${MODULE:-halloween-bang}
-DEV_PLATFORM=${DEV_PLATFORM:-esp32:esp32}
-DEV_BOARD=${DEV_BOARD:-esp32:esp32:esp32s3}
-DEV_PORT=${DEV_PORT:-/dev/ttyACM0}
-DEV_BOARD_BAUDRATE=${DEV_BOARD_BAUDRATE:-460800}
-export ARDUINO_DIRECTORIES_DATA=${ARDUINO_DIRECTORIES_DATA:-$HERE/.arduino15}
-export TMPDIR=/var/tmp
+BANG="python3 $HERE/bang.py"
 
-function do_update(){
-    DEV_URLS=${DEV_URLS:-https://espressif.github.io/arduino-esp32/package_esp32_dev_index.json}
-    [ "${DEV_UPDATE:-0}" = 1 ] && {
-        arduino-cli core install $DEV_PLATFORM
-        arduino-cli --additional-urls "$DEV_URLS" update
-        arduino-cli --additional-urls "$DEV_URLS" core install "${DEV_PLATFORM}"
-        arduino-cli --additional-urls "$DEV_URLS" lib update-index
-        arduino-cli --additional-urls "$DEV_URLS" lib install 'Adafruit NeoPixel' || exit 1
-        arduino-cli --additional-urls "$DEV_URLS" lib upgrade
-        arduino-cli --additional-urls "$DEV_URLS" board list
-    }
-}
+cmd=$1
+shift
+targets=("$@")
+if [ ${#targets[@]} = 0 ]; then
+    # old style: the role comes from -DBANGER / -DBUTTON / -DKILLSWITCH in EXTRA_FLAGS
+    for r in BANGER BUTTON KILLSWITCH; do
+        [[ " $EXTRA_FLAGS " == *" -D$r "* ]] && targets+=($r)
+    done
+fi
+port=()
+[ -n "$DEV_PORT" ] && port=(--port "$DEV_PORT")
 
-function do_build(){
-    DEV_EXTRA_FLAGS="-DARDUINO_USB_MODE=1 -DARDUINO_USB_CDC_ON_BOOT=1 -D_ARDUINO_BLE_H_ -DESP32"
-    if [ "${DEBUG:-0}" = "1" ]; then
-        DEV_EXTRA_FLAGS="$DEV_EXTRA_FLAGS -DDEBUG"
-    fi
-    if [ "${VERBOSE:-1}" = "1" ]; then
-        DEV_EXTRA_FLAGS="$DEV_EXTRA_FLAGS -DVERBOSE"
-    fi
-    if [ ! -z "${EXTRA_FLAGS}" ]; then
-        DEV_EXTRA_FLAGS="$DEV_EXTRA_FLAGS ${EXTRA_FLAGS}"
-    fi
-    arduino-cli -b ${DEV_BOARD} compile \
-        -v \
-        --log \
-        --log-level info \
-        --output-dir dist \
-        --jobs 16 \
-        --build-property compiler.cpp.extra_flags="$DEV_EXTRA_FLAGS -ffunction-sections -fdata-sections -fno-exceptions" \
-        --build-property compiler.c.extra_flags="$DEV_EXTRA_FLAGS -ffunction-sections -fdata-sections -fno-exceptions" \
-        --build-property compiler.c.elf.extra_flags="-O2 -Wl,--gc-sections" \
-        --build-property compiler.S.extra_flags="$DEV_EXTRA_FLAGS -ffunction-sections -fdata-sections -fno-exceptions" \
-        --build-property compiler.ar.extra_flags="" \
-        --build-property compiler.ldflags.extra_flags="-Wl,--gc-sections" \
-        --build-property build.flags.lto=false \
-        --build-property build.extra_flags="$DEV_EXTRA_FLAGS" \
-        --build-property build.custom_partitions=partitions \
-        --build-property upload.maximum_size=1851392 \
-        --board-options PartitionScheme=no_ota \
-        $MODULE \
-        || exit $?
-}
-
-function do_upload(){
-    arduino-cli -b ${DEV_BOARD} upload -p ${DEV_PORT} $MODULE
-}
-
-function do_monitor(){
-    arduino-cli -b ${DEV_BOARD} monitor -p ${DEV_PORT} -c baudrate=${DEV_BOARD_BAUDRATE}
-}
-
-function show_usage(){
-    echo "Usage: $0 [command]"
-    echo ""
-    echo "Commands:"
-    echo "  build|compile   Update platform/libs and build the project"
-    echo "  update          Update platform/libs only (no build)"
-    echo "  upload          Upload the compiled firmware to the device"
-    echo "  monitor         Open a serial monitor to the device"
-    echo "  deploy          Build and upload the firmware"
-    echo "  all             Update, build, upload, and monitor (legacy default)"
-    echo "  help            Show this usage information"
-    echo ""
-    echo "Environment variables:"
-    echo "  MODULE                    Arduino project directory (default: halloween-bang)"
-    echo "  DEV_PLATFORM              Arduino platform (default: esp32:esp32)"
-    echo "  DEV_BOARD                 Board identifier (default: esp32:esp32:esp32s3)"
-    echo "  DEV_PORT                  Serial port (default: /dev/ttyACM0)"
-    echo "  DEV_BOARD_BAUDRATE        Monitor baudrate (default: 460800)"
-    echo "  DEBUG                     Set to 1 to add -DDEBUG flag"
-    echo "  VERBOSE                   Set to any value to add -DVERBOSE flag"
-    echo ""
-    echo "Examples:"
-    echo "  $0 build"
-    echo "  DEV_PORT=/dev/ttyUSB0 $0 deploy"
-    echo "  DEBUG=1 DEFAULT_HOSTNAME=myesp $0 build"
-}
-
-case $1 in
-    upload)
-        do_upload
-        ;;
-    monitor)
-        do_monitor
-        ;;
-    build|compile)
-        DEV_UPDATE=${DEV_UPDATE:-0} do_update
-        do_build
-        ;;
-    deploy)
-        DEV_UPDATE=${DEV_UPDATE:-0} do_update
-        do_build
-        do_upload
-        ;;
-    update)
-        DEV_UPDATE=1 do_update
-        ;;
-    all)
-        DEV_UPDATE=${DEV_UPDATE:-0} do_update
-        do_build
-        do_upload
-        do_monitor
-        ;;
+case $cmd in
+    build|compile)  exec $BANG build "${targets[@]}" ;;
+    upload|flash)   exec $BANG flash "${targets[@]}" "${port[@]}" ;;
+    deploy)         exec $BANG deploy "${targets[@]}" "${port[@]}" ;;
+    all)            exec $BANG deploy "${targets[@]}" "${port[@]}" --monitor ;;
+    monitor)        exec $BANG monitor "${targets[@]}" "${port[@]}" ;;
+    list|identify|update)
+                    exec $BANG $cmd "${targets[@]}" ;;
     help|--help|-h|"")
-        show_usage
-        ;;
+        echo "Usage: $0 {list|identify PORT|update|build|upload|deploy|all|monitor} [board|role|all ...]"
+        echo
+        exec $BANG --help ;;
     *)
-        echo "Unknown command: $1"
-        echo ""
-        show_usage
-        exit 1
-        ;;
+        echo "Unknown command: $cmd (try: $0 help)"
+        exit 1 ;;
 esac

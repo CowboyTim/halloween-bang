@@ -10,7 +10,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Receives "BANG" messages via ESP-NOW from other devices
 - Plays sound effects and LED animations when triggered wirelessly
 - Without a working DFPlayer (not wired, no SD card, BUSY pin stuck) it still plays the full light show and strobe, just silent. Boot gives up on the DFPlayer after 3 tries (about 10 s); reboot the BANGER to get sound back after fixing it
-- Use: `EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER' DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy`
+- Use: `python3 bang.py deploy banger`
 - Status: built, flashed and working on the real board
 
 ### BUTTON Mode
@@ -21,35 +21,43 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Once a KILLSWITCH sends its first LOCK the button is **guarded**: LOCKED (lamp dark, presses thrown away) until the actor ARMs it. After every show it is LOCKED again (so nobody presses twice), but only as a **cooldown**: `COOLDOWN_AFTER_SHOW_MS` (30 s) later it unlocks by itself, so a lost ARM never leaves it dead. A LOCK from the actor (also during the show) holds it locked until the next ARM. A power cycle of the BUTTON unit forgets the guard.
 - The arcade button lamp is a 12 V LED with a 470 ohm series resistor inside (about 20 mA), driven low-side by a 2N2222 on GPIO 7; see `docs/button_schematic.svg`
 - Lamp (PWM): COUNTDOWN = flickers and gets brighter, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
-- Use: `EXTRA_FLAGS='-ULOG_VERBOSE -DBUTTON' DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy`
+- Use: `python3 bang.py deploy button`
 - Status: built, flashed and working on the real board together with the BANGER
 
 ### KILLSWITCH Mode (optional)
-- A small ESP32-S3 SuperMini with one push button and one status LED, carried by the actor
+- A small ESP32-C3 SuperMini with one push button and one status LED, carried by the actor (was planned on an ESP32-S3 SuperMini; the firmware builds for the C3, but its pins are not yet checked for the C3: GPIO 8 is a boot-strapping pin and the on-board LED there)
 - **Tap = LOCK** (BUTTON locks immediately), **hold 1 s = ARM** (BUTTON goes COUNTDOWN, after `ARM_DELAY_MS` = 10 s and a released button it is READY)
 - ARM/LOCK are broadcast (no MAC needed) and sent 3x; the BUTTON reports its state (`S0`..`S3`) every second, so the LED shows: 2 quick blinks = no link, 1 blink/2 s = locked, 4 blinks/s = countdown, solid = ready, fast flicker = show
 - Optional: skip it and everything works as before. Tap it once and the button is guarded.
 - Guarded mode is fail-safe (a lost ARM or a reboot of the KILLSWITCH leaves the button locked), but the very first LOCK is the one that must arrive: it is sent 3x, and the LED shows READY (solid) if it did not, so check it after tapping
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
 - Wiring: GPIO 8 = button to GND (internal pull-up), GPIO 7 = 330 ohm + LED to GND. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
-- Use: `EXTRA_FLAGS=-DKILLSWITCH DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy`
+- Use: `python3 bang.py identify <port>`, add its MAC to `boards.toml`, then `python3 bang.py deploy killswitch`
 - Power: the KILLSWITCH runs fine from a USB power bank, or from a LiPo on the board's `B+` / `B-` pads (see "Battery power" below)
 - Status: logic tested on a PC mock only, not yet compiled/flashed on a real board (the BUTTON side is). The countdown display on the BUTTON is planned for later.
 
 ## Build Commands
 
+`bang.py` builds, flashes and monitors the boards listed in `boards.toml` (name, MAC, chip, role). It finds each board's serial port by its MAC, so it does not matter which `/dev/ttyACM*` a board gets: native-USB ESP32-S3/C3 boards report their MAC as the USB serial number, so finding them needs no reset. Flashing goes through esptool with `--chip` from `boards.toml`, so esptool refuses a board of the wrong chip type, and afterwards the MAC that esptool read is checked again.
+
 ```
-# BANGER mode (wireless trigger)
-EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER' DEV_PORT=/dev/ttyACM0 bash ./build.sh deploy
-
-# BUTTON mode (local button)
-EXTRA_FLAGS='-ULOG_VERBOSE -DBUTTON' DEV_PORT=/dev/ttyACM1 bash ./build.sh deploy
-
-# KILLSWITCH mode (actor's arm/lock button, not tested on hardware yet)
-EXTRA_FLAGS='-ULOG_VERBOSE -DKILLSWITCH' DEV_PORT=/dev/ttyACM2 bash ./build.sh deploy
+python3 bang.py list                    # ports, MACs and which board is where
+python3 bang.py identify /dev/ttyACM2   # chip + MAC of a new board, prints its boards.toml entry
+python3 bang.py deploy banger button    # build + flash (or: build / flash; 'all' = every board)
+python3 bang.py deploy all --log        # with serial logging (-DLOG_VERBOSE)
+python3 bang.py monitor banger button   # serial output of both, lines prefixed with the board name
+python3 bang.py update                  # install/update the esp32 core and the DFPlayer library
 ```
 
-Serial logging is off unless `LOG_VERBOSE` is defined: use `-DLOG_VERBOSE` instead of `-ULOG_VERBOSE` to see the `LOG()` output (`bash ./build.sh monitor`). The `-DVERBOSE` that `build.sh` adds does not switch it on.
+- Builds go to `dist/<chip>/<role>/` (one per chip and role, so building one role no longer overwrites the other). `build.json` there records the flags used.
+- The BUTTON and KILLSWITCH firmware get the BANGER's MAC from `boards.toml` (`-DBANGER_MAC`); the sketch falls back to the built-in MAC when it is built without `bang.py`.
+- Only the bootloader (0x0), the partition table (0x8000) and the app (0x10000) are written, never the full-flash `merged.bin`.
+- Opening the monitor does not reset the boards. If a board resets or is flashed, the monitor reconnects by itself.
+- Extra compiler flags: `--flags='-DX -UY'` or `EXTRA_FLAGS`. `DEBUG=1` adds `-DDEBUG`. `--port` skips the MAC lookup (one board only).
+- Needs Python 3.11+ (`tomllib`), pyserial, arduino-cli with the `esp32:esp32` core. esptool is taken from the installed core.
+- `bash ./build.sh <command> [board|role]` still works and calls `bang.py`; the old style `EXTRA_FLAGS='-DBANGER' bash ./build.sh deploy` takes the role from the flags, and `DEV_PORT` is passed on as `--port`.
+
+Serial logging is off unless `LOG_VERBOSE` is defined (`--log`).
 
 ## Schematics (docs/)
 
@@ -99,7 +107,7 @@ Rough 5 V budget (WS2812B ~60 mA per LED at full white, scaled by brightness): a
 
 ## Battery power (KILLSWITCH, ESP32-S3 SuperMini)
 
-The board is the Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217). Findings:
+These findings are for the Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217) the KILLSWITCH was first planned on. The KILLSWITCH is now an ESP32-C3 SuperMini: check that board for a charger and `B+` / `B-` pads before relying on the points below (many C3 SuperMini boards have neither, so they need a power bank or an external charger/protection board). Findings:
 - It has a **TP4054** single-cell lithium charger (schematic from the Tinytronics download) and `B+` / `B-` battery pads (check the polarity on the silkscreen before connecting). The TP4054 charges to 4.2 V, so only LiPo / Li-ion cells, not LiFePO4. The charge current is set by a PROG resistor (about 2 kohm = 500 mA, 10 kohm = 100 mA, from memory); the actual value on this board is **not verified**, measure it once with a multimeter in series.
 - The blue LED is the **charge status**, not a low-battery warning: it blinks with no battery connected, stays on while charging, and goes out when the battery is full or when the board runs from the battery. (Per the seller's text; not measured.)
 - There is **no over-discharge protection** in the charger: use a protected LiPo cell (1000-2000 mAh is plenty).
@@ -158,7 +166,7 @@ This converts to 44.1kHz, 192kbps constant bitrate MP3 compatible with the DFPla
 
 ### Board GPIO Pinouts
 - **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 12/13 (DFPlayer TX/RX), GPIO 7 (BUSY pin), GPIO 21 (builtin LED), GPIO 8 (button input pullup)
-- **KILLSWITCH mode**: **ESP32 S3 SuperMini** - GPIO 8 button, GPIO 7 status LED
+- **KILLSWITCH mode**: **ESP32-C3 SuperMini** - GPIO 8 button, GPIO 7 status LED (pins still from the S3 SuperMini plan, not yet checked for the C3)
 - **BUTTON mode**: Requires **ESP32 S3 SuperMini** - same GPIO assignments for button input and ESP-NOW communication
 
 ### Why these boards?
@@ -169,10 +177,8 @@ The firmware uses specific GPIO pins for the DFPlayer Mini UART (GPIO 12 TX, GPI
 - `SOUND_VOLUME` is 20 of 30. The MP3s are mastered loud; adjust on site.
 
 ## Environment Variables
-- `MODULE` - Arduino project directory (default: halloween-bang)
-- `DEV_PLATFORM` - Arduino platform (default: esp32:esp32)
-- `DEV_BOARD` - Board identifier (default: esp32:esp32:esp32s3)
-- `DEV_PORT` - Serial port (default: /dev/ttyACM0)
-- `DEV_BOARD_BAUDRATE` - Monitor baudrate (default: 460800)
-- `DEBUG` - Set to 1 to add -DDEBUG flag
-- `VERBOSE` - Set to any value to add -DVERBOSE flag
+- `EXTRA_FLAGS` - extra compiler flags (also `--flags`)
+- `DEBUG` - set to 1 to add the `-DDEBUG` flag
+- `DEV_PORT` - (`build.sh` only) use this port instead of finding it by MAC
+- `ARDUINO_DIRECTORIES_DATA` - arduino-cli data directory (default: `./.arduino15` if it exists, else arduino-cli's default)
+- `DEV_URLS` - board manager URL for `update`

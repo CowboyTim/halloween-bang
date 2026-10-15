@@ -1,0 +1,25 @@
+# Halloween Bang boards, used by bang.py (and build.sh).
+#
+# One table per physical board. bang.py finds the board's serial port by
+# its MAC: native-USB ESP32-S3/C3 boards report the MAC as their USB serial
+# number, so no reset or esptool call is needed for that.
+#   mac  = MAC as esptool prints it ("python3 bang.py identify <port>")
+#   chip = esp32s3 | esp32c3 (selects the arduino-cli FQBN and esptool --chip)
+#   role = BANGER | BUTTON | KILLSWITCH (becomes -DBANGER etc.)
+# The BUTTON and KILLSWITCH firmware are built with the MAC of the BANGER
+# board below (-DBANGER_MAC), so a new BANGER board only needs a new MAC here.
+
+[boards.banger]
+mac  = "e4:b3:23:f9:43:f0"
+chip = "esp32s3"           # ESP32-S3 Zero
+role = "BANGER"
+
+[boards.button]
+mac  = "d0:cf:13:30:14:14"
+chip = "esp32s3"           # ESP32-S3 SuperMini (soldered in, stays S3)
+role = "BUTTON"
+
+[boards.killswitch]
+mac  = ""                  # not known yet: fill in with "bang.py identify <port>"
+chip = "esp32c3"           # ESP32-C3 SuperMini
+role = "KILLSWITCH"

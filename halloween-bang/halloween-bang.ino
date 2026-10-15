@@ -80,7 +80,10 @@ uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
 uint8_t sound_ok = 0;              // BANGER: 1 = DFPlayer found and BUSY works, 0 = lights only
 unsigned long last_activity = 0;
-uint8_t receiverAddress[] = {0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0};
+#ifndef BANGER_MAC                   // bang.py sets it from boards.toml
+#define BANGER_MAC 0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0
+#endif
+uint8_t receiverAddress[] = {BANGER_MAC};
 
 #define WATCHDOG_TIMEOUT_MS 60000   // 60s
 esp_task_wdt_user_handle_t wdt_user_handle;

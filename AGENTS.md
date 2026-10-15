@@ -14,7 +14,7 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - Re-check this principle (and the mock scenarios for it) whenever the state machine changes.
 
 ## Hardware Notes
-- KILLSWITCH board: Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217), TP4054 LiPo charger, `B+`/`B-` pads, blue LED = charge status (blinks with no battery). Charge current (PROG resistor) not verified. No over-discharge protection: protected cell only. About 90-100 mA with Wi-Fi listening (sleep is off in `setup()`), so do not plan on a coin cell; ESP-01 (ESP8266) is not a drop-in (different ESP-NOW API, only GPIO0/GPIO2, boot-strapping pins).
+- KILLSWITCH board: now an ESP32-C3 SuperMini (cheaper; S3 boards are kept for other things). Its pins are not yet re-checked for the C3 (GPIO 8 = strapping pin + on-board LED there), and it may have no charger. The findings that follow are for the Nologo ESP32-S3 SuperMini (Tinytronics SKU 007217) it was first planned on: TP4054 LiPo charger, `B+`/`B-` pads, blue LED = charge status (blinks with no battery). Charge current (PROG resistor) not verified. No over-discharge protection: protected cell only. About 90-100 mA with Wi-Fi listening (sleep is off in `setup()`), so do not plan on a coin cell; ESP-01 (ESP8266) is not a drop-in (different ESP-NOW API, only GPIO0/GPIO2, boot-strapping pins).
 - Strip: the 1000 uF capacitor across 5 V / GND at the strip start is required, the 330 ohm on the data line stays, a 74AHCT125 level shifter is the fix if the first LEDs flicker. The DFPlayer 1 kohm RX resistor is optional. The arcade lamp is an LED with a 470 ohm series resistor inside (about 20 mA). See `docs/*_schematic.svg`.
 - Do not log `WiFi.macAddress()` early in `setup()`: before the Wi-Fi interface is up it prints 00:00:00:00:00:00 (it was removed on purpose).
 - Strobe chips are mounted with thin thermal double-sided tape (3M 8810 class) on aluminium; fine for the 1.5 s burst.
@@ -25,10 +25,10 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - **Three modes** (build flag `-DBANGER`, `-DBUTTON` or `-DKILLSWITCH`):
   - **BANGER**: Receives "BANG" via ESP-NOW → plays sounds/animations
   - **BUTTON**: Non-blocking state machine. KILLSWITCH is optional: boots READY, `guarded`=0, back to READY after each show. The first LOCK sets `guarded` (also remembered during SHOW; forgotten on reboot); then LOCKED → (ARM) COUNTDOWN → (`ARM_DELAY_MS` 10 s + button released) READY → (press: unicast "BANG") SHOW → (`WAIT_TIME_BUTTON` 16 s) LOCKED (or COUNTDOWN if `AUTO_REARM_AFTER_SHOW 1`). After a show the lock is a cooldown: `COOLDOWN_AFTER_SHOW_MS` (30 s, 0 = off) later it goes READY by itself unless the actor sent LOCK (`hold_lock`, cleared by ARM). LOCK sends COUNTDOWN/READY to LOCKED; ARM is ignored in READY/SHOW. Lamp = PWM on `LED_12V_PIN` (GPIO 7), patterns in `lamp_level()`. Sends its state "S0".."S3" every `STATUS_PERIOD_MS`.
-  - **KILLSWITCH** (optional): SuperMini, GPIO 8 button, GPIO 7 LED. Tap = "LOCK", hold `ARM_HOLD_MS` (1 s) = "ARM", both broadcast `KILL_REPEATS` (3) times. LED shows the BUTTON state (no link after `STATUS_TIMEOUT_MS`). Schematics: `docs/killswitch_schematic.svg`, `docs/system_overview.svg`.
+  - **KILLSWITCH** (optional): ESP32-C3 SuperMini, GPIO 8 button, GPIO 7 LED. Tap = "LOCK", hold `ARM_HOLD_MS` (1 s) = "ARM", both broadcast `KILL_REPEATS` (3) times. LED shows the BUTTON state (no link after `STATUS_TIMEOUT_MS`). Schematics: `docs/killswitch_schematic.svg`, `docs/system_overview.svg`.
 - Messages (block `MESSAGES BEGIN/END`, strict length+memcmp matching): "BANG", "ARM", "LOCK", "S0".."S3". CPU must run ≥80 MHz for ESP-NOW (`setup_cpu_speed(80)`).
-- BANGER and BUTTON are built, flashed and verified working on the real boards (`EXTRA_FLAGS='-ULOG_VERBOSE -DBANGER'` on /dev/ttyACM0, `'-ULOG_VERBOSE -DBUTTON'` on /dev/ttyACM1, `bash ./build.sh deploy`). KILLSWITCH is only tested on a host mock, not compiled/flashed yet. Countdown 8-segment display is planned, not implemented.
-- Serial logging needs `-DLOG_VERBOSE`; the `-DVERBOSE` that `build.sh` adds does nothing.
+- BANGER (ESP32-S3 Zero) and BUTTON (ESP32-S3 SuperMini, soldered in, stays S3) are built, flashed and verified working on the real boards (`python3 bang.py deploy banger button`). KILLSWITCH builds for esp32c3 but is only tested on a host mock, not flashed yet. Countdown 8-segment display is planned, not implemented.
+- Serial logging needs `-DLOG_VERBOSE` (`bang.py ... --log`).
 - Controls 300 WS2812B LEDs (5 m, 60 LED/m) via `EdSoftLED` library
   - Fuse: `LINE_START`..`LINE_END` = LEDs 0-119 (2 m, starts at the audience/button)
   - Ring: `RING_START`..`RING_END` = LEDs 120-299 (closed circle, ~0.95 m across)
@@ -43,9 +43,17 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 - Strobe LED: `STROBE_PIN` = GPIO 5 (BANGER) → trigger input of an AOD4184A ("D4184") MOSFET trigger module (or the gate of a logic-level N-MOSFET with 100-220 ohm series and 10 kohm pull-down), strobe LED on its own 12 V supply with shared GND (3x 3 W 9-11 V COB chips, each with its own ~6.8-10 ohm series resistor, ~0.9 A total). GPIO 5 is a "safe" pin on the S3 Zero; GPIO 4 strip, 7 BUSY, 8 button, 12/13 DFPlayer are taken.
 - Show flow (`play_something()`): play sound 1 + animation 1 → wait for BUSY pin low→high (max `SOUND_END_TIMEOUT_MS`) → play sound 2 + animation 2 → wait for sound end (same bound). About 14.5 s in total; without a DFPlayer (`sound_ok` = 0) the sounds are skipped and the animations run on their own timers (~14.1 s).
 
+### `bang.py` + `boards.toml` - build / flash / monitor
+- `boards.toml`: one entry per physical board: `mac`, `chip` (`esp32s3` | `esp32c3`), `role`. It is the only place MACs live: the BUTTON/KILLSWITCH get the BANGER MAC as `-DBANGER_MAC` (the sketch's `#ifndef BANGER_MAC` default is a fallback for builds without `bang.py`).
+- The port is found by MAC from the USB serial number (native USB-Serial/JTAG, no reset); esptool (from the installed core) flashes with `--chip` and the MAC it reads is checked. Output in `dist/<chip>/<role>/`, build cache in `.build/`.
+- Flashes bootloader 0x0, partitions 0x8000, app 0x10000 only (no `merged.bin`, no `boot_app0`), so data in other flash regions survives a flash.
+- Monitor: pyserial, opens with RTS cleared before DTR (pyserial's own order resets the board on USB-Serial/JTAG).
+- `build.sh` is only a wrapper around `bang.py`.
+- Planned next: one build per chip with the role stored in a small flash partition written by `bang.py flash`; KILLSWITCH pins for the C3.
+
 ### `EdSoftLED.h/cpp` - LED strip driver
 - Supports WS2812 and SK6812 strips
-- Uses ESP32 RMT peripheral
+- Uses ESP32 RMT peripheral (4 memory blocks, 2 on chips with only 2 TX channels like the C3)
 - Gamma correction, brightness control
 - `begin()` claims RMT channel (call once; `setup()` also calls `rmtInit`, remove that one if flicker or "init sender failed" appears)
 - Colour quirk: `getRed`/`getGreen` and the strip-type naming are swapped and cancel out. Use `strip.Color(r,g,b)` with `setPixelColor(i, uint32_t)`; the 5-argument `setPixelColor(i,r,g,b,w)` gives wrong colours.
@@ -66,8 +74,8 @@ The show must always work. The killswitch/guard is a convenience for the actor, 
 ### `partitions.csv`
 - ESP32 partition table (OTA, SPIFFS, NVS, storage)
 
-## Build Artifacts (in `dist/`)
-- `halloween-bang.ino.bin` - Firmware (903KB)
+## Build Artifacts (in `dist/<chip>/<role>/`)
+- `halloween-bang.ino.bin` - Firmware (~940 KB on S3)
 - `halloween-bang.ino.elf` - ELF binary (9MB)
 - `halloween-bang.ino.map` - Map file
 - `halloween-bang.ino.merged.bin` - Merged binary (4MB)

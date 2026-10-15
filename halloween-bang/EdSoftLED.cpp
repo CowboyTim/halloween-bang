@@ -57,10 +57,16 @@ void EdSoftLED::updateLength(uint16_t n)
 //  for flicker on long strips (256, 625 LEDs). More blocks = more tolerance to
 //  CPU jitter; it does NOT need more memory per LED - the array is streamed.
 //  If "init sender failed" appears, drop to RMT_MEM_NUM_BLOCKS_2.
+//  The ESP32-C3 has only 2 TX channels, so 2 blocks is its maximum.
 //--------------------------------------------
+#if SOC_RMT_TX_CANDIDATES_PER_GROUP >= 4
+#define EDSOFTLED_RMT_BLOCKS RMT_MEM_NUM_BLOCKS_4
+#else
+#define EDSOFTLED_RMT_BLOCKS RMT_MEM_NUM_BLOCKS_2
+#endif
 void EdSoftLED::begin(void)
 {
-  if (!rmtInit(_pin_number, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_4, 10000000))
+  if (!rmtInit(_pin_number, RMT_TX_MODE, EDSOFTLED_RMT_BLOCKS, 10000000))
   {
    log_e("init sender failed");
   }
