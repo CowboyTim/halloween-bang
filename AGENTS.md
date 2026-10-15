@@ -93,6 +93,7 @@ The show must always work. The killswitch is a convenience for the actor, never 
 - Review all changes with `git status` and `git diff` first
 - Commit messages should be concise and match repo style
 - Only commit when ready; use `git add -p` for selective staging if needed
+- End commit messages with `Co-Authored-By: Claude <noreply@anthropic.com>`. Never put a model name (Claude Opus / Sonnet / Haiku, or a model ID) in commit messages, PR titles or bodies, code comments, or anything else pushed to the repo
 
 ## Logging
 - Use `LOG(...)` macro instead of `Serial.print()` / `Serial.println()` for all debugging output
