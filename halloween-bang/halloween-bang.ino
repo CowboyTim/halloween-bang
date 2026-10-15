@@ -64,9 +64,9 @@
 #define KILL_BOOT_PIN       GPIO_NUM_9  // on-board BOOT button works too (held while powering up = flash mode)
 #define KILL_LED_PIN        GPIO_NUM_8  // built-in blue LED
 #define KILL_LED_ON         LOW         // it is lit when the pin is LOW
-// The C3 SuperMini's antenna garbles packets at full power: at 20 dBm about half the LOCKs
-// arrived, at 8.5 dBm all of them (measured at the BUTTON, 2026-10-15).
-#define KILL_TX_POWER       WIFI_POWER_8_5dBm
+// Wi-Fi TX power of the C3. Lower power was tried (8.5 dBm); at 7 m the reception was about
+// the same at every level, so full power is kept (measured at the BUTTON, 2026-10-15).
+#define KILL_TX_POWER       WIFI_POWER_19_5dBm
 #else
 // ESP32-S3 SuperMini
 #define KILL_BUTTON_PIN     GPIO_NUM_8  // push button to GND (internal pull-up)
@@ -254,35 +254,7 @@ static bool msg_is(const uint8_t *msg, int len, const char *s) {
   return len == (int)strlen(s) && memcmp(msg, s, len) == 0;
 }
 
-#ifdef RANGE_TEST
-// Range test (build with --flags=-DRANGE_TEST, BUTTON + KILLSWITCH): the KILLSWITCH steps
-// through Wi-Fi TX power levels and sends "RT" <power> every RANGE_TEST_GAP_MS; the BUTTON
-// logs per level how many arrived and their RSSI. Normal LOCK / FREE is off in this build.
-#define RANGE_TEST_GAP_MS     50
-#define RANGE_TEST_STEP_MS    4000      // time per power level = 80 packets
-const int8_t range_test_levels[] = {20, 28, 34, 44, 52, 60, 68, 78};  // 0.25 dBm units: 5 .. 19.5 dBm
-volatile int16_t rt_level = -1, rt_n = 0;
-volatile int32_t rt_rssi = 0;
-volatile int16_t rt_min = 0;
-volatile int16_t rt_done_level = -1, rt_done_n = 0, rt_done_min = 0;
-volatile int32_t rt_done_rssi = 0;
-#endif
-
 void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
-#ifdef RANGE_TEST
-  if (len == 3 && msg[0] == 'R' && msg[1] == 'T') {
-    int16_t rssi = mac->rx_ctrl->rssi;
-    if (msg[2] != rt_level) {              // next level: hand the finished one to loop() to log
-      if (rt_level >= 0) {
-        rt_done_n = rt_n; rt_done_rssi = rt_rssi; rt_done_min = rt_min; rt_done_level = rt_level;
-      }
-      rt_level = msg[2]; rt_n = 0; rt_rssi = 0; rt_min = 0;
-    }
-    rt_n++; rt_rssi += rssi;
-    if (rssi < rt_min) rt_min = rssi;
-    return;
-  }
-#endif
   if(msg_is(msg, len, "BANG")) {
     trigger_animation = 1;
   } else if(msg_is(msg, len, "LOCK")) {
@@ -505,16 +477,6 @@ void do_button_loop(){
     last_lamp_ms = now;
     ledcWrite(LED_12V_PIN, lamp_level(bstate, now - bstate_since));
   }
-#ifdef RANGE_TEST
-  if (rt_done_level >= 0) {
-    int16_t lv = rt_done_level, n = rt_done_n, mn = rt_done_min;
-    int32_t sum = rt_done_rssi;
-    rt_done_level = -1;
-    LOG("RANGE TX %2d.%02d dBm: %3d / %d received (%3d%%), RSSI avg %d min %d", lv / 4, (lv % 4) * 25,
-        n, RANGE_TEST_STEP_MS / RANGE_TEST_GAP_MS, n * 100 / (RANGE_TEST_STEP_MS / RANGE_TEST_GAP_MS),
-        n ? (int)(sum / n) : 0, mn);
-  }
-#endif
   delay(2);
 }
 
@@ -557,24 +519,6 @@ void killswitch_setup(){
 
 void do_killswitch_loop(){
   uint32_t now = millis();
-#ifdef RANGE_TEST
-  static uint8_t  lv = 0;
-  static uint32_t step_since = 0, next_ms = 0;
-  if (now - step_since >= RANGE_TEST_STEP_MS || !step_since) {
-    if (step_since) lv = (lv + 1) % sizeof(range_test_levels);
-    step_since = now ? now : 1;
-    WiFi.setTxPower((wifi_power_t)range_test_levels[lv]);
-    LOG("RANGE TX power %d (0.25 dBm units), set %d", range_test_levels[lv], (int)WiFi.getTxPower());
-  }
-  if ((int32_t)(now - next_ms) >= 0) {
-    uint8_t m[3] = {'R', 'T', (uint8_t)range_test_levels[lv]};
-    esp_now_send(broadcastAddress, m, 3);
-    next_ms = now + RANGE_TEST_GAP_MS;
-  }
-  digitalWrite(KILL_LED_PIN, ((now - step_since) < 150) ? KILL_LED_ON : !KILL_LED_ON);  // blink per level
-  delay(2);
-  return;
-#endif
 
   // debounce: the level must stay the same for 30 ms.
   // The external button and the BOOT button do the same (LOW = held).

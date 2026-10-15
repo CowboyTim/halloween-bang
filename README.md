@@ -34,7 +34,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
 - Wiring: GPIO 3 = button to GND (internal pull-up), nothing else. See `docs/killswitch_schematic.svg` and `docs/system_overview.svg` (states and messages)
 - Use: `python3 bang.py identify <port>`, add its MAC to `boards.toml`, then `python3 bang.py deploy killswitch`
-- The C3 sends at 8.5 dBm instead of 20 dBm: the C3 SuperMini's small antenna garbles about half the packets at full power (measured). Check the range at the real distance
+- The C3 sends at 19.5 dBm (`KILL_TX_POWER`). Lower power (8.5 dBm) was tried; at 7 m reception hardly changed with power, so it was kept at the higher level
 - Power: a USB power bank. Most C3 SuperMini boards have no LiPo charger or `B+` / `B-` pads (see "Battery power" below)
 - Status: flashed on the ESP32-C3 SuperMini, tested with the on-board BOOT button
 
