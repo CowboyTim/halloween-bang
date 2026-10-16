@@ -1,6 +1,6 @@
 # TODO
 
-Status as of 2026-10-16. "Won't do" items are kept on purpose, so the decision and the reason stay visible.
+Status as of 2026-10-16 (evening). "Won't do" items are kept on purpose, so the decision and the reason stay visible.
 
 ## Open
 
@@ -11,19 +11,21 @@ Status as of 2026-10-16. "Won't do" items are kept on purpose, so the decision a
   - solder the SRX882 into the BUTTON (5 V, DATA via 1 kohm to GPIO 6, 17 cm antenna) and the STX882 into the KILLSWITCH; mount the antennas straight and away from metal,
   - check the STX882's supply range (3.3 V works; 5 V would give more power, but only after the datasheet allows it).
 - **STROBO box** (add-on): works on the bench (tested 2026-10-16). Still to do: choose the LEDs and their drive values, solder it, rebuild the BANGER with the final box MACs, and check a full show with the box at its real place (`docs/strobo_schematic.svg`).
-- **Several EXPLOSION boxes:** the code supports any number (one `[boards.*]` entry each). Decide how many, and where.
+- **Boxes:** decided 2026-10-16: one EXPLOSION box and one STROBO box. The code still supports any number (one `[boards.*]` entry each).
 - **Tests still to do:**
-  - cold power-up of the EXPLOSION box and the BANGER (the DFPlayer ACK fix was only tested warm),
   - BANGER show without a DFPlayer / SD card (the strip should run the full ~14 s),
   - BANGER with the EXPLOSION box off (the show must not be delayed),
   - line-out: does its level follow the DFPlayer volume setting?
   - 1 kohm resistors on the DFPlayer TX/BUSY lines: measure the high levels at 5 V and the pin voltage (below about 3.6 V),
   - timing offset between the BANGER's and the box's sound (phone microphone).
-- **Docs:** the SVGs were rendered and checked on 2026-10-16 (resvg, DejaVu fonts) and the overlaps fixed. Look at them in a browser once as well, since fonts differ.
-- **BUTTON / KILLSWITCH** still run builds from before the watchdog handler fix; they pick it up on the next flash.
-- **Production builds:** the boards run `--log` builds (harmless). `python3 bang.py deploy all` for builds without logging.
 - **BANGER's DFPlayer** shares the strip's 5 V: listen for noise during the white flash; if there is any, give it its own 5 V feed.
 - **KILLSWITCH power:** USB power bank only. Battery use untested; most C3 SuperMinis have no charger.
+
+## Done (2026-10-16)
+
+- All boards flashed with production builds (no `--log`), which also brings the watchdog handler fix to the BUTTON and KILLSWITCH.
+- Cold power-up of the EXPLOSION box and the BANGER tested (the DFPlayer ACK fix).
+- SVG schematics checked (rendered, and looked at in a browser).
 
 ## Won't do
 
