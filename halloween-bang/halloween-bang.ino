@@ -30,6 +30,7 @@
   #include <driver/gpio.h>
   #include <driver/rmt.h>
   #include <esp_task_wdt.h>
+  #include <esp_rom_sys.h>
   // ESP32 fallback if needed
 #else
   #error "This board is not supported or is missing Wi-Fi hardware!"
@@ -44,6 +45,12 @@
 #define SOUND_VOLUME        20  // BANGER, DFPlayer volume 0-30
 #endif
 #define SOUND_1             1
+#if defined(EXPLOSION) && CONFIG_IDF_TARGET_ESP32C3
+#define EXPL_LED_PIN        GPIO_NUM_8  // EXPLOSION (C3): built-in blue LED, lit when LOW
+#define EXPL_LED_ON         LOW
+#endif
+#define EXPL_RETRY_MS       5000        // EXPLOSION: search for the DFPlayer this often while it is missing
+#define EXPL_BLINK_MS       300         // EXPLOSION: LED blink half-period while the DFPlayer is missing
 #define SOUND_2             2
 #if defined(EXPLOSION) && CONFIG_IDF_TARGET_ESP32C3
 // EXPLOSION sound box on a C3 SuperMini (free pins, UART1)
@@ -596,45 +603,34 @@ void do_killswitch_loop(){
 // ==== BUTTON / KILLSWITCH END ====
 
 // DFPlayer on the DFPLAYER_* pins, sets sound_ok. Shared by the BANGER and the EXPLOSION box.
-void sound_setup(){
-  // DFPPlayer serial setup
-  doYIELD;
-  LOG("DFPlayer Mini WAIT 1");
-  delay(3000);
+// UART to the DFPlayer (BANGER and EXPLOSION box)
+void dfplayer_uart_setup(){
   LOG("DFPlayer UART setup: 9600, %d, %d, %d", SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
   DFPLayerSerial.begin(9600, SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
-  LOG("DFPlayer Mini WAIT 2");
-  delay(3000);
   // pull-up: an unconnected BUSY wire reads HIGH = "not playing"
   pinMode(DFPLAYER_BUSY_PIN, INPUT_PULLUP);
+}
 
-  LOG("DFPlayer Mini setup START");
-  uint8_t ok = 0;
-  for(uint8_t i = 0; i < DFPLAYER_INIT_TRIES && !ok; i++){
+// One try: the DFPlayer answers, BUSY works, settings applied. Blocks for about DFPLAYER_BUSY_TIMEOUT_MS at most
+uint8_t dfplayer_try_init(){
+  // Library hazard (DFRobotDFPlayerMini): in ACK mode sendStack() loops "while (_isSending) waitAvailable()".
+  // After any timeout the library's _isAvailable flag stays set until readType()/read() is called, so
+  // waitAvailable() then returns at once and a missing ACK keeps _isSending true: that loop never ends.
+  // This froze the box at a cold power-up (the DFPlayer is not answering yet). So: clear the flag here,
+  // use ACK mode only for the detecting begin(), and send everything after it without ACK (nothing can block).
+  myDFPlayer.readType();
+  if(!myDFPlayer.begin(DFPLayerSerial, true, true))
+    return 0;
+  myDFPlayer.begin(DFPLayerSerial, false, false);   // public way to leave ACK mode (disableACK() is private): no reset, no waiting
+  LOG("DFPlayer Mini ready! Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
+  uint32_t t0 = millis();
+  while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
+    if(millis() - t0 >= DFPLAYER_BUSY_TIMEOUT_MS){
+      LOG("DFPlayer BUSY pin stuck LOW");
+      return 0;
+    }
     doYIELD;
-    ok = myDFPlayer.begin(DFPLayerSerial, true, true);
-    if(!ok){
-      LOG("DFPlayer Mini not detected (try %d/%d)", i + 1, DFPLAYER_INIT_TRIES);
-      delay(500);
-    }
-  }
-  if(ok){
-    LOG("DFPlayer Mini ready! Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
-    uint32_t t0 = millis();
-    while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
-      if(millis() - t0 >= DFPLAYER_BUSY_TIMEOUT_MS){
-        LOG("DFPlayer BUSY pin stuck LOW");
-        ok = 0;
-        break;
-      }
-      doYIELD;
-      delay(100);
-    }
-  }
-  sound_ok = ok;
-  if(!sound_ok){
-    LOG("DFPlayer not working: light show only, no sound");
-    return;
+    delay(100);
   }
   LOG("DFPlayer BUSY HIGH, continue");
   myDFPlayer.volume(SOUND_VOLUME);
@@ -642,6 +638,33 @@ void sound_setup(){
   myDFPlayer.outputDevice(DFPLAYER_DEVICE_SD);
   myDFPlayer.enableDAC();
   LOG("DFPlayer setup complete");
+  return 1;
+}
+
+// BANGER: a few tries at boot, then the show runs without sound
+void sound_setup(){
+  doYIELD;
+  LOG("DFPlayer Mini WAIT 1");
+  delay(3000);
+  dfplayer_uart_setup();
+  LOG("DFPlayer Mini WAIT 2");
+  delay(3000);
+
+  LOG("DFPlayer Mini setup START");
+  uint8_t ok = 0;
+  for(uint8_t i = 0; i < DFPLAYER_INIT_TRIES && !ok; i++){
+    doYIELD;
+    ok = dfplayer_try_init();
+    if(!ok){
+      LOG("DFPlayer Mini not detected (try %d/%d)", i + 1, DFPLAYER_INIT_TRIES);
+      delay(500);
+    }
+  }
+  sound_ok = ok;
+  if(!sound_ok){
+    LOG("DFPlayer not working: light show only, no sound");
+    return;
+  }
 }
 
 void banger_setup(){
@@ -669,10 +692,20 @@ void banger_setup(){
   sound_setup();
 }
 
+uint32_t expl_next_try_ms = 0;      // EXPLOSION: when the next DFPlayer search starts
+
 void explosion_setup(){
   // first, so a SND is never missed whatever happens with the DFPlayer below
   esp_now_register_recv_cb(OnDataRecv);
-  sound_setup();
+#ifdef EXPL_LED_PIN
+  pinMode(EXPL_LED_PIN, OUTPUT);
+  digitalWrite(EXPL_LED_PIN, !EXPL_LED_ON);
+#endif
+  dfplayer_uart_setup();
+  // no search here: do_explosion_loop() searches, so the watchdog is fed between the tries
+  sound_ok = 0;
+  // allow for DFPlayer to boot up, as explosion_setup() doesnt do the setup anymore and loop immediately loops
+  delay(3000);
 }
 
 // EXPLOSION box: plays the sound the BANGER announces. A repeated SND (the BANGER sends
@@ -681,10 +714,26 @@ void explosion_setup(){
 uint32_t snd_last_ms[3] = {0, 0, 0};
 
 void do_explosion_loop(){
+  uint32_t now = millis();
+  // find the DFPlayer: first search at once, then every EXPL_RETRY_MS for as long as it is missing
+  if(!sound_ok && (int32_t)(now - expl_next_try_ms) >= 0){
+    expl_next_try_ms = now + EXPL_RETRY_MS;   // set first: a slow try does not shorten the wait
+    LOG("DFPlayer search");
+    sound_ok = dfplayer_try_init();
+    if(sound_ok){
+      LOG("DFPlayer found: sound on");
+    } else {
+      LOG("DFPlayer not found, next search in %d s", EXPL_RETRY_MS / 1000);
+    }
+  }
+#ifdef EXPL_LED_PIN
+  // LED: lit when the box is ready, blinking while the DFPlayer is missing
+  uint8_t led_on = sound_ok ? 1 : ((now / EXPL_BLINK_MS) & 1);
+  digitalWrite(EXPL_LED_PIN, led_on ? EXPL_LED_ON : !EXPL_LED_ON);
+#endif
   if(snd_req){
     uint8_t n = snd_req;
     snd_req = 0;
-    uint32_t now = millis();
     if(!snd_last_ms[n] || now - snd_last_ms[n] >= SND_DEDUPE_MS){
       snd_last_ms[n] = now ? now : 1;
       play_sound(n);
@@ -1117,7 +1166,7 @@ void setup_wdt(){
   esp_task_wdt_config_t wdt_config = {
     .timeout_ms = WATCHDOG_TIMEOUT_MS,
     .idle_core_mask = 0,
-    .trigger_panic = false,  // Set to false to allow custom handler to be called
+    .trigger_panic = true,   // after the handler below returns, the IDF panics: backtrace of the stuck code, then reboot
   };
   ok = esp_task_wdt_init(&wdt_config);
   if(ok != ESP_OK) {
@@ -1136,9 +1185,11 @@ void setup_wdt(){
 }
 
 void esp_task_wdt_isr_user_handler(void){
-  // CRITICAL: Must use abort() not esp_restart() in ISR context!
-  // esp_restart() is NOT ISR-safe and will trigger Interrupt WDT
-  LOG("[WDT] 1 Task watchdog timeout occurred!");
+  // Runs in interrupt context ("same limitations as an interrupt function", esp_task_wdt.h): no LOG(),
+  // no Serial, no esp_restart(). LOG() takes locks and writes to the USB serial, which ended in an
+  // Interrupt WDT panic and hid this line. esp_rom_printf is the interrupt-safe print; the reboot is
+  // done by the IDF itself (trigger_panic in setup_wdt()).
+  esp_rom_printf("[WDT] loop() did not run for %d s: stuck, rebooting\n", WATCHDOG_TIMEOUT_MS / 1000);
 }
 
 
