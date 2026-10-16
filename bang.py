@@ -91,32 +91,70 @@ def load_boards():
     return boards
 
 
+def resolve(boards, n):
+    """One selector (board name, role in any case, or 'all') -> (boards, must be connected).
+    A name that is both a board and a role (a board called 'button') means the whole role as soon as the
+    role has more than one board (a spare), so 'deploy button' reaches the spare too."""
+    if n.lower() == "all":
+        return list(boards.values()), False
+    role_hits = [b for b in boards.values() if b["role"] == n.upper()]
+    if n in boards and not (len(role_hits) > 1 and n.upper() in ROLES):
+        return [boards[n]], True
+    return role_hits, len(role_hits) == 1
+
+
 def select(boards, names):
     """Board names, roles (any case) or 'all' -> list of boards, in boards.toml order."""
     if not names:
         die("name a board, a role or 'all' (see 'bang.py list')")
     picked = []
     for n in names:
-        if n.lower() == "all":
-            hits = list(boards.values())
-        elif n in boards:
-            hits = [boards[n]]
-        else:
-            hits = [b for b in boards.values() if b["role"] == n.upper()]
+        hits, _ = resolve(boards, n)
         if not hits:
             die(f"no board or role '{n}' in boards.toml (have: {', '.join(boards)})")
         picked += [b for b in hits if b not in picked]
     return picked
 
 
-def connected_only(picked, names, port):
-    """With 'all', boards that have no mac yet are skipped for flash/monitor instead of failing."""
-    if port or "all" not in [n.lower() for n in names]:
+def select_req(boards, names):
+    """Like select(), plus the names of the boards that must be connected: a board named exactly, or the
+    only board of a role. A board picked as one of several (a role with a spare, or 'all') is optional."""
+    picked = select(boards, names)
+    required = set()
+    for n in names:
+        hits, req = resolve(boards, n)
+        if req:
+            required.update(b["name"] for b in hits)
+    return picked, required
+
+
+def present(picked, required, port, wait_for_required=False):
+    """The boards of a selection that can be used now. Optional boards that have no mac or are not plugged
+    in are skipped with a note; a required one is an error (or, for monitor, waited for)."""
+    if port:
         return picked
+    plugged = {mac for _, mac, _ in list_ports() if mac}
+    out = []
     for b in picked:
+        why = None
         if not b["mac"]:
-            print(f"(skipping {b['name']}: no mac in boards.toml)")
-    return [b for b in picked if b["mac"]]
+            why = "no mac in boards.toml"
+        elif b["mac"] not in plugged:
+            why = "not connected"
+        if not why:
+            out.append(b)
+        elif b["name"] in required:
+            if why == "no mac in boards.toml":
+                die(f"{b['name']}: no mac in boards.toml yet; run 'bang.py identify <port>' and fill it in, or pass --port")
+            if wait_for_required:
+                out.append(b)
+            else:
+                die(f"{b['name']} ({b['mac']}) is not connected (see 'bang.py list')")
+        else:
+            print(f"(skipping {b['name']}: {why})")
+    if not out:
+        die("none of the selected boards is connected (see 'bang.py list')")
+    return out
 
 
 def banger_mac(boards, board):
@@ -349,13 +387,17 @@ def build(board, boards, args):
                    "built": time.strftime("%Y-%m-%d %H:%M:%S")}, f, indent=1)
 
 
-def cmd_build(args, boards):
+def build_boards(picked, boards, args):
     done = set()
-    for b in select(boards, args.boards):
-        key = (b["chip"], b["role"])     # one build per chip + role
+    for b in picked:
+        key = (b["chip"], b["role"])     # one build per chip + role, also for a spare board
         if key not in done:
             build(b, boards, args)
             done.add(key)
+
+
+def cmd_build(args, boards):
+    build_boards(select(boards, args.boards), boards, args)
 
 
 def flash(board, args):
@@ -390,23 +432,21 @@ def flash(board, args):
 
 
 def cmd_flash(args, boards):
-    picked = connected_only(select(boards, args.boards), args.boards, args.port)
-    if args.port and len(picked) > 1:
+    picked, required = select_req(boards, args.boards)
+    use = present(picked, required, args.port)
+    if args.port and len(use) > 1:
         die("--port works with one board only")
-    for b in picked:
+    for b in use:
         flash(b, args)
 
 
 def cmd_deploy(args, boards):
-    picked = select(boards, args.boards)
-    to_use = connected_only(picked, args.boards, args.port)
-    if args.port and len(picked) > 1:
+    picked, required = select_req(boards, args.boards)
+    use = present(picked, required, args.port)      # fails before building when a required board is not there
+    if args.port and len(use) > 1:
         die("--port works with one board only")
-    if not args.port:
-        for b in to_use:       # fail before building when a board is not there
-            find_port(b)
-    cmd_build(args, boards)
-    for b in to_use:
+    build_boards(use, boards, args)
+    for b in use:
         flash(b, args)
     if args.monitor:
         cmd_monitor(args, boards)
@@ -455,12 +495,10 @@ def monitor_one(board, port_override, prefix, stop):
 
 
 def cmd_monitor(args, boards):
-    picked = connected_only(select(boards, args.boards), args.boards, args.port)
+    picked, required = select_req(boards, args.boards)
+    picked = present(picked, required, args.port, wait_for_required=True)   # a required board may be plugged in later
     if args.port and len(picked) > 1:
         die("--port works with one board only")
-    for b in picked:
-        if not b["mac"] and not args.port:
-            die(f"{b['name']}: no mac in boards.toml, pass --port")
     stop = threading.Event()
     threads = [threading.Thread(target=monitor_one, args=(b, args.port, len(picked) > 1, stop),
                                 daemon=True) for b in picked]

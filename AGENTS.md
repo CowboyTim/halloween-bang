@@ -50,6 +50,7 @@ The show must always work. The killswitch is a convenience for the actor, never 
 ### `bang.py` + `boards.toml` - build / flash / monitor
 - `boards.toml`: one entry per physical board: `mac`, `chip` (`esp32s3` | `esp32c3`), `role`. It is the only place MACs live: the BUTTON/KILLSWITCH get the BANGER MAC as `-DBANGER_MAC` (the sketch's `#ifndef BANGER_MAC` default is a fallback for builds without `bang.py`).
 - The port is found by MAC from the USB serial number (native USB-Serial/JTAG, no reset); esptool (from the installed core) flashes with `--chip` and the MAC it reads is checked. Output in `dist/<chip>/<role>/`, build cache in `.build/`.
+- Several boards per role are supported (a spare BUTTON, several EXPLOSION/STROBO boxes): `resolve()` turns a selector into boards; a role selector means all boards of the role, and a name that is both a board and a role (`button`) means the whole role once the role has more than one board. `present()` skips optional boards that are not plugged in (a role with several boards, or `all`) and fails for required ones (a board named exactly, or the only board of a role); builds are shared per chip+role.
 - Flashes bootloader 0x0, partitions 0x8000, app 0x10000 only (no `merged.bin`, no `boot_app0`), so data in other flash regions survives a flash.
 - Monitor: pyserial, opens with RTS cleared before DTR (pyserial's own order resets the board on USB-Serial/JTAG).
 - `build.sh` is only a wrapper around `bang.py`.

@@ -79,6 +79,7 @@ python3 bang.py monitor banger button   # serial output of both, lines prefixed 
 python3 bang.py update                  # install/update the esp32 core and the DFPlayer library
 ```
 
+- Spares and several boxes: a role can have several boards in `boards.toml` (for example a second BUTTON, `[boards.button_spare]`, a template is in the file). Selecting the role (`deploy button`) builds once and flashes whichever of its boards are plugged in, and prints which it skipped; naming one board (`deploy button_spare`) requires that board to be connected. `all` flashes everything that is plugged in
 - Builds go to `dist/<chip>/<role>/` (one per chip and role, so building one role no longer overwrites the other). `build.json` there records the flags used.
 - The BUTTON and KILLSWITCH firmware get the BANGER's MAC from `boards.toml` (`-DBANGER_MAC`); the sketch falls back to the built-in MAC when it is built without `bang.py`.
 - Only the bootloader (0x0), the partition table (0x8000) and the app (0x10000) are written, never the full-flash `merged.bin`.
