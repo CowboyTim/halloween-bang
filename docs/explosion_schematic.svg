@@ -61,12 +61,33 @@
   <rect x="480" y="259" width="60" height="22" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
   <text x="510" y="254" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">1 kΩ</text>
   <polyline points="570,270 720,270" fill="none" stroke="#0d47a1" stroke-width="3"/>
-  <rect x="40" y="600" width="1020" height="190" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="3"/>
+  <rect x="110" y="496" width="350" height="96" rx="8" fill="#fffdf5" stroke="#b45309" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="120" y="512" font-size="11" font-weight="bold" fill="#b45309">Decoupling across the DFPlayer's VCC and GND pins</text>
+  <text x="120" y="526" font-size="11" font-weight="bold" fill="#b45309">(solder them right at the pins)</text>
+  <line x1="122" y1="532" x2="448" y2="532" stroke="#c62828" stroke-width="3"/>
+  <line x1="122" y1="570" x2="448" y2="570" stroke="#111" stroke-width="3"/>
+  <text x="450" y="527" font-size="10" font-weight="bold" fill="#c62828" text-anchor="end">5 V</text>
+  <text x="450" y="584" font-size="10" font-weight="bold" fill="#111" text-anchor="end">GND</text>
+  <line x1="200" y1="532" x2="200" y2="547" stroke="#333" stroke-width="2.5"/>
+  <line x1="188" y1="547" x2="212" y2="547" stroke="#333" stroke-width="3"/>
+  <line x1="188" y1="555" x2="212" y2="555" stroke="#333" stroke-width="3"/>
+  <line x1="200" y1="555" x2="200" y2="570" stroke="#333" stroke-width="2.5"/>
+  <circle cx="200" cy="532" r="3.5" fill="#c62828"/><circle cx="200" cy="570" r="3.5" fill="#111"/>
+  <text x="215" y="545" font-size="12" font-weight="bold" fill="#c62828">+</text>
+  <line x1="330" y1="532" x2="330" y2="547" stroke="#333" stroke-width="2.5"/>
+  <line x1="318" y1="547" x2="342" y2="547" stroke="#333" stroke-width="3"/>
+  <line x1="318" y1="555" x2="342" y2="555" stroke="#333" stroke-width="3"/>
+  <line x1="330" y1="555" x2="330" y2="570" stroke="#333" stroke-width="2.5"/>
+  <circle cx="330" cy="532" r="3.5" fill="#c62828"/><circle cx="330" cy="570" r="3.5" fill="#111"/>
+  <text x="200" y="584" font-size="10" fill="#333" text-anchor="middle">470 uF / 16 V</text>
+  <text x="330" y="584" font-size="10" fill="#333" text-anchor="middle">100 nF</text>
+  <rect x="40" y="606" width="1020" height="214" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="3"/>
   <text x="58" y="628" font-size="15" font-weight="bold" fill="#222" text-anchor="start">Notes</text>
-  <text x="58" y="652" font-size="13" font-weight="normal" fill="#333" text-anchor="start">Power: the DFPlayer runs from 5 V (the SuperMini's 5 V pin on USB, or a 5 V supply rated for about 1 A), not from the C3's 3.3 V regulator. Join the grounds.</text>
-  <text x="58" y="676" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The C3's pins are not 5 V tolerant. Each DFPlayer -> ESP line goes through 1 kΩ, which limits the current into the pin's protection diode.</text>
-  <text x="58" y="700" font-size="13" font-weight="normal" fill="#333" text-anchor="start">BUSY: no voltage divider or pull-down. It is an input with the internal pull-up, so an idle (high) BUSY reads high.</text>
-  <text x="58" y="724" font-size="13" font-weight="normal" fill="#333" text-anchor="start">ESP TX -> DFPlayer RX also has 1 kΩ, which reduces hiss (optional on the BANGER, drawn here).</text>
-  <text x="58" y="752" font-size="13" font-weight="bold" fill="#b45309" text-anchor="start">To confirm by measuring (not yet done): with a multimeter, the DFPlayer's TX and BUSY high level at 5 V, and the C3 pin voltage with the resistor in place (should stay below about 3.6 V).</text>
-  <text x="58" y="776" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The DFPlayer's line-out (DAC_R / DAC_I) is not connected. Fed to an amplifier with its own volume knob, it would give a separate line-out level (see README).</text>
+  <text x="58" y="658" font-size="13" font-weight="normal" fill="#333" text-anchor="start">Power: the DFPlayer runs from 5 V (the SuperMini's 5 V pin on USB, or a 5 V supply rated for about 1 A), not from the C3's 3.3 V regulator. Join the grounds.</text>
+  <text x="58" y="682" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The C3's pins are not 5 V tolerant. Each DFPlayer -> ESP line goes through 1 kΩ, which limits the current into the pin's protection diode.</text>
+  <text x="58" y="706" font-size="13" font-weight="normal" fill="#333" text-anchor="start">BUSY: no voltage divider or pull-down. It is an input with the internal pull-up, so an idle (high) BUSY reads high.</text>
+  <text x="58" y="730" font-size="13" font-weight="normal" fill="#333" text-anchor="start">ESP TX -> DFPlayer RX also has 1 kΩ, which reduces hiss (optional on the BANGER, drawn here).</text>
+  <text x="58" y="758" font-size="13" font-weight="bold" fill="#b45309" text-anchor="start">To confirm by measuring (not yet done): with a multimeter, the DFPlayer's TX and BUSY high level at 5 V, and the C3 pin voltage with the resistor in place (should stay below about 3.6 V).</text>
+  <text x="58" y="782" font-size="13" font-weight="normal" fill="#333" text-anchor="start">The DFPlayer's line-out (DAC_R / DAC_I) is not connected. Fed to an amplifier with its own volume knob, it would give a separate line-out level (see README).</text>
+  <text x="58" y="806" font-size="13" font-weight="normal" fill="#333">Decoupling: 470 uF / 16 V electrolytic (+ to 5 V) and 100 nF ceramic across the DFPlayer's VCC and GND pins, as close to the pins as possible.</text>
 </svg>
