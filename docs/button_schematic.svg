@@ -139,4 +139,29 @@
   <text x="420" y="675" font-size="10" font-weight="normal" fill="#555" text-anchor="start">GPIO 4 and 5 (unused)</text>
   <text x="420" y="690" font-size="10" font-weight="normal" fill="#555" text-anchor="start">SRX882 DATA is 5 V:</text>
   <text x="420" y="703" font-size="10" font-weight="normal" fill="#555" text-anchor="start">keep the 1 kohm</text>
+<rect x="40" y="92" width="200" height="236" rx="8" fill="#fffdf5" stroke="#b45309" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="52" y="110" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">Wired killswitch (failsafe)</text>
+  <text x="52" y="124" font-size="11" font-weight="normal" fill="#555" text-anchor="start">up to 10 m, held = locked</text>
+  <text x="150" y="146" font-size="10" font-weight="bold" fill="#c62828" text-anchor="middle">3.3 V</text>
+  <line x1="150" y1="150" x2="150" y2="158" stroke="#c62828" stroke-width="3"/>
+  <rect x="141" y="158" width="18" height="36" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="164" y="179.0" font-size="9" font-weight="bold" fill="#b45309" text-anchor="start">2.2 kohm</text>
+  <line x1="150" y1="194" x2="150" y2="210" stroke="#333" stroke-width="3"/>
+  <line x1="52" y1="210" x2="66" y2="210" stroke="#333" stroke-width="3"/>
+  <rect x="66" y="201" width="44" height="18" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="88.0" y="213" font-size="9" font-weight="bold" fill="#b45309" text-anchor="middle">1 kohm</text>
+  <line x1="110" y1="210" x2="150" y2="210" stroke="#333" stroke-width="3"/>
+  <circle cx="150" cy="210" r="4" fill="#333"/>
+  <line x1="150" y1="210" x2="176" y2="210" stroke="#333" stroke-width="3"/>
+  <text x="180" y="214" font-size="11" font-weight="bold" fill="#0d47a1" text-anchor="start">GPIO 2</text>
+  <line x1="150" y1="210" x2="150" y2="238" stroke="#333" stroke-width="3"/>
+  <line x1="138" y1="238" x2="162" y2="238" stroke="#333" stroke-width="3"/>
+  <line x1="138" y1="246" x2="162" y2="246" stroke="#333" stroke-width="3"/>
+  <line x1="150" y1="246" x2="150" y2="262" stroke="#333" stroke-width="3"/>
+  <line x1="138" y1="262" x2="162" y2="262" stroke="#111" stroke-width="3"/>
+  <text x="168" y="246" font-size="10" font-weight="normal" fill="#333" text-anchor="start">100 nF</text>
+  <text x="52" y="282" font-size="10" font-weight="normal" fill="#555" text-anchor="start">cable: twisted pair, switch</text>
+  <text x="52" y="295" font-size="10" font-weight="normal" fill="#555" text-anchor="start">(normally open) between signal</text>
+  <text x="52" y="308" font-size="10" font-weight="normal" fill="#555" text-anchor="start">and GND, at the far end</text>
+  <text x="52" y="324" font-size="10" font-weight="bold" fill="#555" text-anchor="start">cut wire = button works</text>
 </svg>

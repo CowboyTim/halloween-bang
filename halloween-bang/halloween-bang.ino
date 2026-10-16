@@ -310,6 +310,7 @@ uint8_t rf433_ok = 0;           // 1 = RadioHead initialised, 0 = ESP-NOW only
 #endif
 #define LINK_ESPNOW     1
 #define LINK_433        2
+#define LINK_WIRED      4
 volatile uint8_t lock_links = 0;   // BUTTON: which links delivered LOCKs during the current lock (logged on release)
 
 // ==== MESSAGES BEGIN ====
@@ -457,6 +458,15 @@ void IRAM_ATTR button_pressed() {
 #define KILL_LOCK_PERIOD_MS    150     // KILLSWITCH: "LOCK" is repeated this often while held (several may get lost)
 #ifndef LOCK_MAX_MS
 #define LOCK_MAX_MS            15000   // a lock ends by itself after this long, even if the killswitch stays held
+
+// Wired killswitch on the BUTTON: a normally-open switch to GND on a long cable (up to about 10 m), held = locked,
+// OR'ed with the radio killswitch. A long wire picks up noise and a false lock blocks the button, so the line must
+// stay LOW for WIRED_KILL_ENGAGE_MS before it counts; releasing is quick. Wiring (see the BUTTON schematic): twisted
+// pair, 2.2 kohm pull-up to 3.3 V at this end (the internal one is too weak for a long wire), 1 kohm in series
+// with the pin and 100 nF from the pin to GND.
+#define WIRED_KILL_PIN         GPIO_NUM_2   // on BUTTON
+#define WIRED_KILL_ENGAGE_MS   100          // LOW at least this long = held
+#define WIRED_KILL_RELEASE_MS  30           // HIGH at least this long = released
 #endif
 
 // BUTTON lamp (12 V via the 2N2222 on LED_12V_PIN, PWM)
@@ -521,6 +531,8 @@ void button_setup(){
 
   LOG("button INPUT_PULLUP PIN: %d", BUTTON_PIN);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(WIRED_KILL_PIN, INPUT_PULLUP);   // plus the external 2.2 kohm pull-up on a long cable
+  LOG("wired killswitch input on GPIO %d", WIRED_KILL_PIN);
   // Attach interrupt on FALLING edge (when the button pulls the pin to GND)
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), button_pressed, FALLING);
 
@@ -538,6 +550,44 @@ void button_setup(){
   ledcWrite(LED_12V_PIN, lamp_level(bstate, 0));
   bstate_since = millis();
 }
+
+// ==== WIRED KILL BEGIN ====
+uint32_t wired_low_since  = 0;     // millis() when the pin last went LOW (0 = it is HIGH)
+uint32_t wired_high_since = 0;     // millis() when the pin last went HIGH (0 = it is LOW)
+uint32_t wired_since      = 0;     // millis() when the current hold began
+uint8_t  wired_active     = 0;     // 1 = the wired killswitch is held
+uint8_t  wired_expired    = 0;     // 1 = held for LOCK_MAX_MS: ignored until the pin has been HIGH
+
+// LOW (switch to GND) for WIRED_KILL_ENGAGE_MS = held, HIGH for WIRED_KILL_RELEASE_MS = released. Like the radio
+// lock it never lasts longer than LOCK_MAX_MS: a stuck or shorted wire is ignored until it goes HIGH again.
+// A cut wire reads HIGH (pull-up) = not held, so the button works.
+static bool wired_kill_held(uint32_t now, int level){
+  if (level == LOW) {
+    wired_high_since = 0;
+    if (!wired_low_since) wired_low_since = now ? now : 1;
+    if (!wired_active && !wired_expired && now - wired_low_since >= WIRED_KILL_ENGAGE_MS) {
+      wired_active = 1;
+      wired_since  = now ? now : 1;
+      LOG("wired killswitch held");
+    }
+  } else {
+    wired_low_since = 0;
+    if (!wired_high_since) wired_high_since = now ? now : 1;
+    if (now - wired_high_since >= WIRED_KILL_RELEASE_MS) {
+      if (wired_active) LOG("wired killswitch released");
+      wired_active  = 0;
+      wired_expired = 0;
+    }
+  }
+  if (wired_active && now - wired_since >= LOCK_MAX_MS) {
+    LOG("wired killswitch held for %d s: lock expired, ignored until it is released", LOCK_MAX_MS / 1000);
+    wired_active  = 0;
+    wired_expired = 1;
+  }
+  if (wired_active) lock_links |= LINK_WIRED;
+  return wired_active;
+}
+// ==== WIRED KILL END ====
 
 // 433 MHz: LOCK / FREE from the KILLSWITCH's second link, polled every pass (the receive ISR collects them)
 static void rf433_poll(){
@@ -574,6 +624,7 @@ void do_button_loop(){
     lock_expired = 1;
   }
   if (lock_expired) held = false;
+  if (wired_kill_held(now, digitalRead(WIRED_KILL_PIN))) held = true;   // OR with the wired killswitch
 
   // button released for at least 50 ms (a button that is held down must be let go first)
   if (digitalRead(BUTTON_PIN) == HIGH) {
@@ -590,8 +641,9 @@ void do_button_loop(){
         portENTER_CRITICAL(&r_mux);
         button_was_pressed = 0;
         portEXIT_CRITICAL(&r_mux);
-        LOG("killswitch released, button works again (lock came via:%s%s)",
-            (lock_links & LINK_ESPNOW) ? " ESP-NOW" : "", (lock_links & LINK_433) ? " 433 MHz" : "");
+        LOG("killswitch released, button works again (lock came via:%s%s%s)",
+            (lock_links & LINK_ESPNOW) ? " ESP-NOW" : "", (lock_links & LINK_433) ? " 433 MHz" : "",
+            (lock_links & LINK_WIRED) ? " wired" : "");
         lock_links = 0;
         button_set_state(BS_READY);
       }
