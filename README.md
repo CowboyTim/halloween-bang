@@ -64,7 +64,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND). With a D4184 trigger module instead, no gate resistors: GPIO 5 goes straight to the module's trigger input (see "Strobe LED (BANGER)" for its wiring); LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.strobo]`, `python3 bang.py deploy strobo`, then `python3 bang.py deploy banger`. Several boxes are possible, like EXPLOSION
 - Aim it away from people's eyes; flashes at 8-10 Hz are in the photosensitive-epilepsy range (see the strobe notes below)
-- Status: code and schematic written, not yet tested on hardware
+- Status: works on the bench (tested 2026-10-16); the LED type, count and supply for the real strobe are still to be chosen
 
 ## Build Commands
 

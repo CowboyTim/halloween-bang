@@ -10,7 +10,7 @@ Status as of 2026-10-16. "Won't do" items are kept on purpose, so the decision a
   - verify RadioHead's timer ISR and ESP-NOW run together on the BUTTON for a long time (hours), and that the lamp PWM is unaffected,
   - solder the SRX882 into the BUTTON (5 V, DATA via 1 kohm to GPIO 6, 17 cm antenna) and the STX882 into the KILLSWITCH; mount the antennas straight and away from metal,
   - check the STX882's supply range (3.3 V works; 5 V would give more power, but only after the datasheet allows it).
-- **STROBO box** (new, add-on): code and schematic exist (`docs/strobo_schematic.svg`), untested on hardware. Needs the LEDs and their drive values, a board, `bang.py identify`, then a rebuilt BANGER.
+- **STROBO box** (add-on): works on the bench (tested 2026-10-16). Still to do: choose the LEDs and their drive values, solder it, rebuild the BANGER with the final box MACs, and check a full show with the box at its real place (`docs/strobo_schematic.svg`).
 - **Several EXPLOSION boxes:** the code supports any number (one `[boards.*]` entry each). Decide how many, and where.
 - **Tests still to do:**
   - cold power-up of the EXPLOSION box and the BANGER (the DFPlayer ACK fix was only tested warm),
