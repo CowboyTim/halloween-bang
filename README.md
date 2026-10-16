@@ -10,6 +10,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Receives "BANG" messages via ESP-NOW from other devices
 - Plays sound effects and LED animations when triggered wirelessly
 - Without a working DFPlayer (not wired, no SD card, BUSY pin stuck) it still plays the full light show and strobe, just silent. Boot gives up on the DFPlayer after 3 tries (about 10 s); reboot the BANGER to get sound back after fixing it
+- Status LED: the S3 Zero's built-in RGB LED (a WS2812 on GPIO 21, bit-banged because the strip owns the RMT peripheral) shows dim green when ready, flickers orange while the show runs, and blinks yellow while the DFPlayer is missing
 - Use: `python3 bang.py deploy banger`
 - Status: built, flashed and working on the real board
 

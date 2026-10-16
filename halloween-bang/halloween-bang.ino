@@ -30,6 +30,7 @@
   #include <driver/gpio.h>
   #include <driver/rmt.h>
   #include <esp_task_wdt.h>
+  #include <soc/gpio_struct.h>
   #include <esp_rom_sys.h>
   // ESP32 fallback if needed
 #else
@@ -73,7 +74,7 @@
 #define DFPLAYER_BUSY_TIMEOUT_MS  3000  // boot: BUSY must go HIGH (idle) within this time
 #define SOUND_END_TIMEOUT_MS      2000  // show: wait at most this long for a sound to end after its animation
 
-#define BUILTIN_LED         GPIO_NUM_21 // any, but not working
+#define BUILTIN_LED         GPIO_NUM_21 // S3 Zero: one WS2812 RGB LED (BANGER status LED, see ws2812_write(); not usable through RMT, the strip owns it)
 #define BUTTON_PIN          GPIO_NUM_8  // on BUTTON
 #define LED_12V_PIN         GPIO_NUM_7  // on BUTTON
 
@@ -304,8 +305,55 @@ void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
 
 // only yields; the watchdog is fed once per loop() pass (wdt_feed), so a wait that never
 // ends inside a function is not hidden from it
+#ifdef BANGER
+// ---- BANGER status LED: the S3 Zero's WS2812 on BUILTIN_LED ---------------------------------
+// Bit-banged, because the RMT channels belong to the strip (neopixelWrite() fails). One pixel is
+// 24 bits, about 30 us with interrupts off on this core. Only written when the colour changes.
+// Called from myYIELD(), so it also runs inside the show's loops (they yield every frame).
+#define BLED_FLICKER_MS  50      // random on/off step while the show runs
+#define BLED_BLINK_MS    300     // blink half-period while the DFPlayer is missing
+portMUX_TYPE bled_mux = portMUX_INITIALIZER_UNLOCKED;
+uint32_t bled_last = 0xFFFFFFFF;
+
+void ws2812_write(uint8_t r, uint8_t g, uint8_t b){
+  const uint32_t mask = 1UL << BUILTIN_LED;
+  const uint32_t mhz  = getCpuFrequencyMhz();                       // CPU cycles per microsecond
+  const uint32_t t0h = mhz * 4 / 10, t1h = mhz * 8 / 10, tbit = mhz * 125 / 100;   // 0.4 / 0.8 / 1.25 us
+  const uint32_t grb = ((uint32_t)g << 16) | ((uint32_t)r << 8) | b;
+  portENTER_CRITICAL(&bled_mux);
+  for(int i = 23; i >= 0; i--){
+    uint32_t high = ((grb >> i) & 1) ? t1h : t0h;
+    uint32_t t = ESP.getCycleCount();
+    GPIO.out_w1ts = mask;
+    while(ESP.getCycleCount() - t < high) {}
+    GPIO.out_w1tc = mask;
+    while(ESP.getCycleCount() - t < tbit) {}
+  }
+  portEXIT_CRITICAL(&bled_mux);
+}
+
+void banger_led_update(){
+  uint32_t now = millis();
+  uint8_t r = 0, g = 0, b = 0;
+  if(animation_is_running){
+    if((((now / BLED_FLICKER_MS) * 2654435761u) >> 24) & 1){ r = 40; g = 8; }   // flicker (orange) while the show runs
+  } else if(!sound_ok){
+    if((now / BLED_BLINK_MS) & 1){ r = 24; g = 16; }                            // blink (yellow): DFPlayer missing
+  } else {
+    g = 10;                                                                     // dim green: ready
+  }
+  uint32_t c = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+  if(c == bled_last) return;
+  bled_last = c;
+  ws2812_write(r, g, b);
+}
+#endif
+
 void myYIELD(){
   yield();
+#ifdef BANGER
+  banger_led_update();
+#endif
 }
 
 void wdt_feed(){
@@ -682,6 +730,10 @@ void banger_setup(){
   // Fancy led strip
   setup_led_strip();
 
+  // status LED (WS2812 on the S3 Zero), updated from myYIELD()
+  pinMode(BUILTIN_LED, OUTPUT);
+  digitalWrite(BUILTIN_LED, LOW);
+
 #ifdef EXPLOSION_MAC
   esp_now_peer_info_t peerInfo = {};
   memcpy(peerInfo.peer_addr, explosionAddress, 6);
@@ -764,8 +816,7 @@ void setup() {
 
   setup_wdt();
 
-  // builtin LED (fails for the EdSoftLED's use of RMT)
-  //neopixelWrite(BUILTIN_LED, 0, 0, 200); // (Pin, Green, Red, Blue)
+  // builtin LED: see banger_led_update() (bit-banged, neopixelWrite() fails because the strip uses RMT)
 
   // only the BANGER has a strip (GPIO 4 is a free pin on the others)
   if (WHAT == IS_BANGER && !rmtInit(LED_STRIP_GPIO_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000)) {
