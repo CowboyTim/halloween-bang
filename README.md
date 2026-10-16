@@ -48,7 +48,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Power the DFPlayer from **5 V**, not from the C3's 3.3 V regulator. The C3's Wi-Fi transmit peaks draw from that regulator too; a 3 W speaker on the same rail makes it sag, which can reset the C3 or distort the sound. Use the SuperMini's 5 V pin (USB) or a 5 V supply, with the grounds joined.
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.explosion]`, `python3 bang.py deploy explosion`, then `python3 bang.py deploy banger` (the BANGER needs the box's MAC at build time)
 - To turn it off: unpower it. No rebuild needed
-- Built-in LED (C3 SuperMini, GPIO 8): blinks while the DFPlayer is missing, and searches for it every 5 s until it is found. Lit solid once the DFPlayer is found and the box is ready. The search runs in `loop()`, so the watchdog is fed between tries
+- Built-in LED (C3 SuperMini, GPIO 8): blinks while the DFPlayer is missing, and searches for it every 5 s until it is found. Lit solid once the DFPlayer is found and the box is ready, and flickers while a sound plays. The search runs in `loop()`, so the watchdog is fed between tries
 - Wiring: `docs/explosion_schematic.svg`. The C3 pins are TX GPIO 5, RX GPIO 6, BUSY GPIO 3 (UART1)
 - Status: working on the bench with the DFPlayer on 5 V. The 1 kΩ values and the BUSY idle level are not measured yet
 

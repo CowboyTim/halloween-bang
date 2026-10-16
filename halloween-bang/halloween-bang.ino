@@ -51,6 +51,8 @@
 #endif
 #define EXPL_RETRY_MS       5000        // EXPLOSION: search for the DFPlayer this often while it is missing
 #define EXPL_BLINK_MS       300         // EXPLOSION: LED blink half-period while the DFPlayer is missing
+#define EXPL_FLICKER_MS     50          // EXPLOSION: LED flicker step while a sound plays (random on/off every step)
+#define EXPL_PLAY_GRACE_MS  400         // EXPLOSION: BUSY goes low a moment after "play", flicker from the command on
 #define SOUND_2             2
 #if defined(EXPLOSION) && CONFIG_IDF_TARGET_ESP32C3
 // EXPLOSION sound box on a C3 SuperMini (free pins, UART1)
@@ -693,6 +695,7 @@ void banger_setup(){
 }
 
 uint32_t expl_next_try_ms = 0;      // EXPLOSION: when the next DFPlayer search starts
+uint32_t expl_play_ms     = 0;      // EXPLOSION: when the last sound was started (0 = none yet)
 
 void explosion_setup(){
   // first, so a SND is never missed whatever happens with the DFPlayer below
@@ -727,8 +730,15 @@ void do_explosion_loop(){
     }
   }
 #ifdef EXPL_LED_PIN
-  // LED: lit when the box is ready, blinking while the DFPlayer is missing
-  uint8_t led_on = sound_ok ? 1 : ((now / EXPL_BLINK_MS) & 1);
+  // LED: blinking while the DFPlayer is missing, flickering while a sound plays, lit when ready
+  uint8_t led_on;
+  if(!sound_ok){
+    led_on = (now / EXPL_BLINK_MS) & 1;
+  } else if(sound_is_playing() || (expl_play_ms && now - expl_play_ms < EXPL_PLAY_GRACE_MS)){
+    led_on = (((now / EXPL_FLICKER_MS) * 2654435761u) >> 24) & 1;   // a new random bit every step
+  } else {
+    led_on = 1;
+  }
   digitalWrite(EXPL_LED_PIN, led_on ? EXPL_LED_ON : !EXPL_LED_ON);
 #endif
   if(snd_req){
@@ -736,6 +746,7 @@ void do_explosion_loop(){
     snd_req = 0;
     if(!snd_last_ms[n] || now - snd_last_ms[n] >= SND_DEDUPE_MS){
       snd_last_ms[n] = now ? now : 1;
+      expl_play_ms   = snd_last_ms[n];
       play_sound(n);
     }
   }
