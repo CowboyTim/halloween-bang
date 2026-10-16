@@ -121,4 +121,27 @@
   <rect x="46" y="812" width="40" height="20" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
   <text x="98" y="827" font-size="13" fill="#333">dashed = optional / planned.   Button: INPUT_PULLUP, so the switch goes to GND with no resistor.</text>
   <text x="46" y="852" font-size="13" fill="#333">Lamp: GPIO 7, 1 kohm, 2N2222 base. The 2N2222 pulls the lamp - to GND, lamp + is on the 12 V from the MT3608 (the lamp is LED + 470 ohm inside).</text>
+  <rect x="285" y="612" width="305" height="146" rx="8" fill="#fffdf5" stroke="#b45309" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="297" y="630" font-size="11" font-weight="bold" fill="#b45309" text-anchor="start">433 MHz receiver</text>
+  <text x="297" y="644" font-size="11" font-weight="bold" fill="#b45309" text-anchor="start">(second path for LOCK / FREE)</text>
+  <rect x="299" y="662" width="100" height="104" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="2.5"/>
+  <text x="349" y="684" font-size="13" font-weight="bold" fill="#e65100" text-anchor="middle">SRX882</text>
+  <text x="349" y="700" font-size="10" font-weight="normal" fill="#444" text-anchor="middle">433 MHz ASK</text>
+  <text x="349" y="716" font-size="10" font-weight="normal" fill="#444" text-anchor="middle">ANT: wire 17 cm</text>
+  <circle cx="399" cy="696" r="4" fill="#c62828"/>
+  <text x="393" y="700" font-size="10" font-weight="bold" fill="#c62828" text-anchor="end">VCC</text>
+  <line x1="399" y1="696" x2="429" y2="696" stroke="#c62828" stroke-width="3"/>
+  <text x="435" y="700" font-size="11" font-weight="bold" fill="#c62828" text-anchor="start">to 5 V</text>
+  <circle cx="399" cy="726" r="4" fill="#0d47a1"/>
+  <text x="393" y="730" font-size="10" font-weight="bold" fill="#0d47a1" text-anchor="end">DATA</text>
+  <line x1="399" y1="726" x2="419" y2="726" stroke="#0d47a1" stroke-width="3"/>
+  <rect x="419" y="715" width="40" height="22" fill="#fff" stroke="#b45309" stroke-width="2.5"/>
+  <text x="439" y="712" font-size="10" font-weight="bold" fill="#b45309" text-anchor="middle">1 kohm</text>
+  <line x1="459" y1="726" x2="479" y2="726" stroke="#0d47a1" stroke-width="3"/>
+  <text x="485" y="730" font-size="11" font-weight="bold" fill="#0d47a1" text-anchor="start">to GPIO 6</text>
+  <circle cx="399" cy="756" r="4" fill="#111"/>
+  <text x="393" y="760" font-size="10" font-weight="bold" fill="#111" text-anchor="end">GND</text>
+  <line x1="399" y1="756" x2="429" y2="756" stroke="#111" stroke-width="3"/>
+  <text x="435" y="760" font-size="11" font-weight="bold" fill="#111" text-anchor="start">to GND</text>
+  <text x="297" y="746" font-size="10" font-weight="normal" fill="#555" text-anchor="start">GPIO 4 and 5 are also set by RadioHead (unused)</text>
 </svg>

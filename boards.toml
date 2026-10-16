@@ -5,7 +5,7 @@
 # number, so no reset or esptool call is needed for that.
 #   mac  = MAC as esptool prints it ("python3 bang.py identify <port>")
 #   chip = esp32s3 | esp32c3 (selects the arduino-cli FQBN and esptool --chip)
-#   role = BANGER | BUTTON | KILLSWITCH (becomes -DBANGER etc.)
+#   role = BANGER | BUTTON | KILLSWITCH | EXPLOSION | STROBO (becomes -DBANGER etc.)
 # The BUTTON and KILLSWITCH firmware are built with the MAC of the BANGER
 # board below (-DBANGER_MAC), so a new BANGER board only needs a new MAC here.
 
@@ -19,14 +19,23 @@ mac  = "d0:cf:13:30:14:14"
 chip = "esp32s3"           # ESP32-S3 SuperMini (soldered in, stays S3)
 role = "BUTTON"
 
-# Optional sound-only box (same 0001.mp3 / 0002.mp3 SD card as the BANGER). The BANGER announces
-# each sound to it. Leave it out, or unpower it, and the show runs the same.
+# Optional sound-only boxes (same 0001.mp3 / 0002.mp3 SD card as the BANGER). The BANGER announces
+# each sound to them. There can be several (add [boards.explosion2], ...); the BANGER gets all of
+# their MACs, so rebuild it after adding or removing one. Unpower a box, or leave it out, and the
+# show runs the same.
 [boards.explosion]
 mac  = "64:E8:33:82:FD:A0" # rebuild the BANGER after changing this (see bang.py identify)
 chip = "esp32c3"           # C3 SuperMini (pins: see the EXPLOSION block in the sketch)
 role = "EXPLOSION"
 
+# Optional strobe box (add-on, for a strobe the BANGER cannot be cabled to). The BANGER tells it
+# when the KABOOM starts and it runs the same strobe burst. Several are possible, like EXPLOSION.
+[boards.strobo]
+mac  = ""                  # fill in with "bang.py identify <port>", then rebuild the BANGER
+chip = "esp32c3"           # C3 SuperMini (STROBE_PIN GPIO 5, built-in LED GPIO 8)
+role = "STROBO"
+
 [boards.killswitch]
-mac  = "ec:da:3b:bf:72:dc"
+mac  = "9c:9e:6e:c2:f9:00"
 chip = "esp32c3"           # ESP32-C3 SuperMini
 role = "KILLSWITCH"

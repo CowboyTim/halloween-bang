@@ -17,6 +17,13 @@
  #define UART1         Serial1
 #endif // UART_LOG_DEV_UART0
 
+// 433 MHz link (RadioHead): only the BUTTON (receiver) and the KILLSWITCH (transmitter) use it
+#if defined(BUTTON) || defined(KILLSWITCH)
+#define USE_RF433 1
+#else
+#define USE_RF433 0
+#endif
+
 #include <stdlib.h>
 #include "EdSoftLED.h"
 #if defined(ESP8266)
@@ -31,6 +38,10 @@
   #include <driver/rmt.h>
   #include <esp_task_wdt.h>
   #include <soc/gpio_struct.h>
+  #if USE_RF433
+  #include <RH_ASK.h>        // 433 MHz ASK link (STX882 / SRX882): a second path for LOCK / FREE
+  #include <SPI.h>
+  #endif
   #include <esp_rom_sys.h>
   // ESP32 fallback if needed
 #else
@@ -46,8 +57,8 @@
 #define SOUND_VOLUME        20  // BANGER, DFPlayer volume 0-30
 #endif
 #define SOUND_1             1
-#if defined(EXPLOSION) && CONFIG_IDF_TARGET_ESP32C3
-#define EXPL_LED_PIN        GPIO_NUM_8  // EXPLOSION (C3): built-in blue LED, lit when LOW
+#if (defined(EXPLOSION) || defined(STROBO)) && CONFIG_IDF_TARGET_ESP32C3
+#define EXPL_LED_PIN        GPIO_NUM_8  // EXPLOSION / STROBO (C3): built-in blue LED, lit when LOW
 #define EXPL_LED_ON         LOW
 #endif
 #define EXPL_RETRY_MS       5000        // EXPLOSION: search for the DFPlayer this often while it is missing
@@ -104,6 +115,7 @@
 #define IS_BANGER     2
 #define IS_KILLSWITCH 3
 #define IS_EXPLOSION  4     // sound box only: plays the sounds the BANGER announces (SND1 / SND2)
+#define IS_STROBO     5     // strobe box only: runs the KABOOM strobe burst when the BANGER says "STRB"
 #if CONFIG_IDF_TARGET_ESP32C3 && (defined(BANGER) || defined(BUTTON))
 #error "BANGER and BUTTON pins are for the ESP32-S3 (GPIO 12/13 are flash pins on the C3); only KILLSWITCH has C3 pins"
 #endif
@@ -119,6 +131,9 @@ uint8_t WHAT = IS_KILLSWITCH;
 #ifdef EXPLOSION
 uint8_t WHAT = IS_EXPLOSION;
 #endif
+#ifdef STROBO
+uint8_t WHAT = IS_STROBO;
+#endif
 
 #define LINE_START    0
 #define LINE_END    119
@@ -126,6 +141,9 @@ uint8_t WHAT = IS_EXPLOSION;
 #define RING_END    299
 
 #define STROBE_ENABLED      1           // 1 = white strobe LED flashes during the KABOOM, 0 = off (timing: see ANIMATIONS block)
+#if defined(STROBO) && !STROBE_ENABLED
+#error "the STROBO box needs STROBE_ENABLED 1"
+#endif
 #define STROBE_PIN          GPIO_NUM_5  // on BANGER: gate of the logic-level N-MOSFET that switches the strobe LED (100-220R in series, 10k pull-down to GND)
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
@@ -143,10 +161,16 @@ unsigned long last_activity = 0;
 #define BANGER_MAC 0xe4, 0xb3, 0x23, 0xf9, 0x43, 0xf0
 #endif
 uint8_t receiverAddress[] = {BANGER_MAC};
-#ifdef EXPLOSION_MAC                 // optional: the BANGER also announces its sounds to this box
-uint8_t explosionAddress[] = {EXPLOSION_MAC};
+// Optional add-on boxes the BANGER tells about the show. bang.py passes one MAC per board of that
+// role in boards.toml (flat list of bytes, EXPLOSION_COUNT / STROBO_COUNT boxes).
+#ifdef EXPLOSION_MACS                // sound boxes: the BANGER announces each sound it starts
+uint8_t explosionAddress[EXPLOSION_COUNT][6] = { EXPLOSION_MACS };
+#endif
+#ifdef STROBO_MACS                   // strobe boxes: the BANGER says when the KABOOM strobe starts
+uint8_t stroboAddress[STROBO_COUNT][6] = { STROBO_MACS };
 #endif
 volatile uint8_t snd_req = 0;        // EXPLOSION: SOUND_1 or SOUND_2 announced by the BANGER
+volatile uint8_t strb_req = 0;       // STROBO: "STRB" received
 
 #define WATCHDOG_TIMEOUT_MS 60000   // 60s
 esp_task_wdt_user_handle_t wdt_user_handle;
@@ -273,6 +297,21 @@ void setup_cpu_speed(uint32_t freq_mhz = 160) {
   }
 }
 
+#if USE_RF433
+// 433 MHz ASK link for LOCK / FREE, next to ESP-NOW (either one is enough: both feed the same lock timer).
+// KILLSWITCH: STX882 DATA on RF433_TX_PIN. BUTTON: SRX882 DATA through 1 kohm on RF433_RX_PIN, 5 V.
+// RadioHead configures all three pins, so none of them may be used for anything else (the lamp is GPIO 7).
+#define RF433_BITRATE   2000    // bits per second; one packet takes about 70 ms on the air
+#define RF433_TX_PIN    4
+#define RF433_RX_PIN    6
+#define RF433_PTT_PIN   5       // unused
+RH_ASK  rf433(RF433_BITRATE, RF433_RX_PIN, RF433_TX_PIN, RF433_PTT_PIN);
+uint8_t rf433_ok = 0;           // 1 = RadioHead initialised, 0 = ESP-NOW only
+#endif
+#define LINK_ESPNOW     1
+#define LINK_433        2
+volatile uint8_t lock_links = 0;   // BUTTON: which links delivered LOCKs during the current lock (logged on release)
+
 // ==== MESSAGES BEGIN ====
 // ESP-NOW messages (exact match, the payload is not NUL terminated):
 //   "BANG"      BUTTON     -> BANGER      start the show
@@ -280,6 +319,7 @@ void setup_cpu_speed(uint32_t freq_mhz = 160) {
 //   "FREE"      KILLSWITCH -> BUTTON      killswitch released: unlock now (else the lock times out)
 //   "SND1"      BANGER     -> EXPLOSION   the BANGER starts 0001.mp3 (the fuse), play it too
 //   "SND2"      BANGER     -> EXPLOSION   the BANGER starts 0002.mp3 (the KABOOM), play it too
+//   "STRB"      BANGER     -> STROBO      the KABOOM animation starts: run the strobe burst
 volatile uint32_t lock_seen_ms    = 0;   // BUTTON: millis() of the last "LOCK" (0 = none / freed)
 uint8_t broadcastAddress[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
@@ -287,18 +327,29 @@ static bool msg_is(const uint8_t *msg, int len, const char *s) {
   return len == (int)strlen(s) && memcmp(msg, s, len) == 0;
 }
 
-void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
-  if(msg_is(msg, len, "BANG")) {
-    trigger_animation = 1;
-  } else if(msg_is(msg, len, "LOCK")) {
+// LOCK / FREE from either link (the ESP-NOW callback or the 433 MHz poll): both end up in the same lock timer
+static void apply_lock_msg(const uint8_t *msg, int len, uint8_t link) {
+  if(msg_is(msg, len, "LOCK")) {
+    lock_links |= link;
     uint32_t t = millis();
     lock_seen_ms = t ? t : 1;
   } else if(msg_is(msg, len, "FREE")) {
+    lock_links |= link;
     lock_seen_ms = 0;
+  }
+}
+
+void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
+  if(msg_is(msg, len, "BANG")) {
+    trigger_animation = 1;
+  } else if(msg_is(msg, len, "LOCK") || msg_is(msg, len, "FREE")) {
+    apply_lock_msg(msg, len, LINK_ESPNOW);
   } else if(msg_is(msg, len, "SND1")) {
     snd_req = SOUND_1;
   } else if(msg_is(msg, len, "SND2")) {
     snd_req = SOUND_2;
+  } else if(msg_is(msg, len, "STRB")) {
+    strb_req = 1;
   }
 }
 // ==== MESSAGES END ====
@@ -420,7 +471,7 @@ void IRAM_ATTR button_pressed() {
 #define BANG_REPEATS           3       // BUTTON -> BANGER: "BANG" is sent this many times, the BANGER starts one show only
 #define BANG_REPEAT_GAP_MS     60
 #define KILL_REPEATS           3       // "FREE" is sent this many times (broadcast has no retries)
-#define KILL_REPEAT_GAP_MS     60
+#define KILL_FREE_GAP_MS       100     // gap between the FREE copies (a 433 MHz packet takes about 70 ms)
 #define KILL_BLINK_MS          300     // KILLSWITCH LED: the power-up blink
 
 enum { BS_LOCKED = 0, BS_READY = 2, BS_SHOW = 3 };
@@ -476,14 +527,32 @@ void button_setup(){
   // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
   setup_cpu_speed(80);
 
+#if USE_RF433
+  // 433 MHz receiver (second path for LOCK / FREE)
+  rf433_ok = rf433.init();
+  LOG("433 MHz receiver %s (SRX882 DATA on GPIO %d)", rf433_ok ? "ready" : "init FAILED, ESP-NOW only", RF433_RX_PIN);
+#endif
+
   // 12V lamp: PWM so it can fade (set up after the CPU speed change)
   ledcAttach(LED_12V_PIN, LAMP_PWM_FREQ, LAMP_PWM_BITS);
   ledcWrite(LED_12V_PIN, lamp_level(bstate, 0));
   bstate_since = millis();
 }
 
+// 433 MHz: LOCK / FREE from the KILLSWITCH's second link, polled every pass (the receive ISR collects them)
+static void rf433_poll(){
+#if USE_RF433
+  if(!rf433_ok) return;
+  uint8_t buf[RH_ASK_MAX_MESSAGE_LEN];
+  uint8_t len = sizeof(buf);
+  if(rf433.recv(buf, &len))
+    apply_lock_msg(buf, len, LINK_433);
+#endif
+}
+
 void do_button_loop(){
   uint32_t now = millis();
+  rf433_poll();
 
   // Inputs. A queued press is consumed on every pass, so nothing piles up while it is not
   // its turn (a press during LOCKED / SHOW is simply gone).
@@ -521,7 +590,9 @@ void do_button_loop(){
         portENTER_CRITICAL(&r_mux);
         button_was_pressed = 0;
         portEXIT_CRITICAL(&r_mux);
-        LOG("killswitch released, button works again");
+        LOG("killswitch released, button works again (lock came via:%s%s)",
+            (lock_links & LINK_ESPNOW) ? " ESP-NOW" : "", (lock_links & LINK_433) ? " 433 MHz" : "");
+        lock_links = 0;
         button_set_state(BS_READY);
       }
       break;
@@ -575,8 +646,22 @@ uint32_t    ks_blink_until  = 0;      // power-up blink
 uint32_t    ks_held_since   = 0;      // millis() when the current hold began
 uint8_t     ks_expired      = 0;      // 1 = held for LOCK_MAX_MS: LOCK stopped until released
 
+static bool ks_radio_idle(){
+#if USE_RF433
+  return !rf433_ok || rf433.mode() != RHGenericDriver::RHModeTx;
+#else
+  return true;
+#endif
+}
+
+// Both links. The 433 MHz packet (about 70 ms on the air) is started without waiting for it, and skipped
+// when the radio is still busy with the previous one (the next LOCK follows within KILL_LOCK_PERIOD_MS).
 void ks_send(const char *m) {
   esp_now_send(broadcastAddress, (const uint8_t *)m, strlen(m));
+#if USE_RF433
+  if(rf433_ok && ks_radio_idle())
+    rf433.send((const uint8_t *)m, strlen(m));
+#endif
 }
 
 void killswitch_setup(){
@@ -595,6 +680,12 @@ void killswitch_setup(){
 
   // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
   setup_cpu_speed(80);
+
+#if USE_RF433
+  // 433 MHz transmitter (second path for LOCK / FREE)
+  rf433_ok = rf433.init();
+  LOG("433 MHz transmitter %s (STX882 DATA on GPIO %d)", rf433_ok ? "ready" : "init FAILED, ESP-NOW only", RF433_TX_PIN);
+#endif
 #ifdef KILL_TX_POWER
   WiFi.setTxPower(KILL_TX_POWER);
 #endif
@@ -637,10 +728,12 @@ void do_killswitch_loop(){
     ks_send("LOCK");
     ks_next_lock_ms = now + KILL_LOCK_PERIOD_MS;
   }
-  if (ks_free_left && (int32_t)(now - ks_next_free_ms) >= 0) {
+  // FREE goes out when the 433 MHz radio is idle: a LOCK still on the air would arrive after the ESP-NOW
+  // FREE and lock the button again for a moment
+  if (ks_free_left && (int32_t)(now - ks_next_free_ms) >= 0 && ks_radio_idle()) {
     ks_send("FREE");
     ks_free_left--;
-    ks_next_free_ms = now + KILL_REPEAT_GAP_MS;
+    ks_next_free_ms = now + KILL_FREE_GAP_MS;
   }
 
   // LED: on while held (= the button is being locked), fast blink once that has expired,
@@ -717,6 +810,15 @@ void sound_setup(){
   }
 }
 
+// ESP-NOW peer (unicast target, no encryption)
+static void add_peer(const uint8_t *mac){
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, mac, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+  esp_now_add_peer(&peerInfo);
+}
+
 void banger_setup(){
   // first, so a BANG is never missed whatever happens with the DFPlayer below
   esp_now_register_recv_cb(OnDataRecv);
@@ -734,13 +836,15 @@ void banger_setup(){
   pinMode(BUILTIN_LED, OUTPUT);
   digitalWrite(BUILTIN_LED, LOW);
 
-#ifdef EXPLOSION_MAC
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, explosionAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-  esp_now_add_peer(&peerInfo);
-  LOG("EXPLOSION box: its sounds are announced to it");
+#ifdef EXPLOSION_MACS
+  for(uint8_t i = 0; i < EXPLOSION_COUNT; i++)
+    add_peer(explosionAddress[i]);
+  LOG("EXPLOSION boxes: %d, their sounds are announced to them", EXPLOSION_COUNT);
+#endif
+#ifdef STROBO_MACS
+  for(uint8_t i = 0; i < STROBO_COUNT; i++)
+    add_peer(stroboAddress[i]);
+  LOG("STROBO boxes: %d, the KABOOM strobe is announced to them", STROBO_COUNT);
 #endif
 
   sound_setup();
@@ -842,6 +946,9 @@ void setup() {
   if(WHAT == IS_EXPLOSION){
      explosion_setup();
   }
+  if(WHAT == IS_STROBO){
+     strobo_setup();
+  }
 }
 
 void do_banger_loop(){
@@ -885,6 +992,9 @@ void loop() {
   }
   if(WHAT == IS_EXPLOSION){
       do_explosion_loop();
+  }
+  if(WHAT == IS_STROBO){
+      do_strobo_loop();
   }
 }
 
@@ -932,9 +1042,19 @@ void play_sound(uint8_t n){
 // the DFPlayer here works. The box is never waited for; check on the bench that a missing box
 // does not delay the show (esp_now_send to an absent peer may take time while Wi-Fi retries)
 void send_snd(uint8_t n){
-#ifdef EXPLOSION_MAC
+#ifdef EXPLOSION_MACS
   const char *m = (n == SOUND_1) ? "SND1" : "SND2";
-  esp_now_send(explosionAddress, (const uint8_t *)m, 4);
+  for(uint8_t i = 0; i < EXPLOSION_COUNT; i++)
+    esp_now_send(explosionAddress[i], (const uint8_t *)m, 4);
+#endif
+}
+
+// tell the STROBO boxes (if this build has any) that the KABOOM animation starts now; same
+// best-effort rules as send_snd()
+void send_strb(){
+#ifdef STROBO_MACS
+  for(uint8_t i = 0; i < STROBO_COUNT; i++)
+    esp_now_send(stroboAddress[i], (const uint8_t *)"STRB", 4);
 #endif
 }
 
@@ -957,6 +1077,7 @@ void play_something() {
   play_sound(SOUND_2);
 
   // ledstrip +2, clear
+  send_strb();
   run_ledstrip_animation_2();
   wait_sound_end(SOUND_2);
 
@@ -1156,6 +1277,53 @@ void strobe_update(uint32_t ms) {
          && ((ms - STROBE_START_MS) % STROBE_PERIOD_MS) < STROBE_ON_MS;
   digitalWrite(STROBE_PIN, on ? HIGH : LOW);
 #endif
+}
+
+// ---- STROBO box ----------------------------------------------------------------------------
+// Runs the KABOOM strobe burst when the BANGER sends "STRB" (the moment its animation 2 starts),
+// with the same STROBE_* timing as the BANGER's own strobe, so both flash together.
+// Safety: the burst ends by itself, the pin is forced LOW afterwards, and a new STRB within
+// STRB_MIN_GAP_MS of the last burst is ignored, so repeats or a glitch cannot keep it strobing.
+#define STRB_MIN_GAP_MS  5000
+uint32_t strobo_t0      = 0;        // millis() when the running burst started (0 = idle)
+uint32_t strobo_last_ms = 0;        // when the last burst started (0 = none yet)
+
+void strobo_setup(){
+  esp_now_register_recv_cb(OnDataRecv);
+  // strobe off from the start (the pull-down keeps it off while the ESP32 boots)
+  pinMode(STROBE_PIN, OUTPUT);
+  digitalWrite(STROBE_PIN, LOW);
+#ifdef EXPL_LED_PIN
+  pinMode(EXPL_LED_PIN, OUTPUT);
+  digitalWrite(EXPL_LED_PIN, EXPL_LED_ON);     // lit: ready
+#endif
+  LOG("STROBO ready, strobe pin %d", (int)STROBE_PIN);
+}
+
+void do_strobo_loop(){
+  uint32_t now = millis();
+  if(strb_req){
+    strb_req = 0;
+    if(!strobo_t0 && (!strobo_last_ms || now - strobo_last_ms >= STRB_MIN_GAP_MS)){
+      strobo_t0 = strobo_last_ms = now ? now : 1;
+      LOG("STRB: strobe burst");
+    }
+  }
+  if(strobo_t0){
+    uint32_t ms = now - strobo_t0;
+    if(ms >= STROBE_START_MS + STROBE_DURATION_MS){
+      digitalWrite(STROBE_PIN, LOW);
+      strobo_t0 = 0;
+    } else {
+      strobe_update(ms);
+    }
+  }
+#ifdef EXPL_LED_PIN
+  // LED: lit when ready, flickers during the burst
+  uint8_t led_on = strobo_t0 ? ((((now / EXPL_FLICKER_MS) * 2654435761u) >> 24) & 1) : 1;
+  digitalWrite(EXPL_LED_PIN, led_on ? EXPL_LED_ON : !EXPL_LED_ON);
+#endif
+  delay(1);
 }
 
 void run_ledstrip_animation_2() {

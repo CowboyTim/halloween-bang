@@ -35,7 +35,7 @@ BOARDS_FILE = os.path.join(HERE, "boards.toml")
 DIST = os.path.join(HERE, "dist")
 BUILD_CACHE = os.path.join(HERE, ".build")
 PLATFORM = "esp32:esp32"
-ROLES = ("BANGER", "BUTTON", "KILLSWITCH", "EXPLOSION")
+ROLES = ("BANGER", "BUTTON", "KILLSWITCH", "EXPLOSION", "STROBO")
 
 # Per chip: arduino-cli FQBN and esptool --chip. Both chips use the bootloader
 # at 0x0, the partition table at 0x8000 and the app at 0x10000 (partitions.csv).
@@ -287,12 +287,9 @@ def mac_flag(name, mac):
     return f"-D{name}=" + ",".join("0x" + x for x in mac.split(":"))
 
 
-def explosion_mac(boards):
-    """MAC of the EXPLOSION sound box (optional), or None while it is not in boards.toml with a MAC."""
-    boxes = [b for b in boards.values() if b["role"] == "EXPLOSION" and b["mac"]]
-    if len(boxes) > 1:
-        die("boards.toml: more than one EXPLOSION board")
-    return boxes[0]["mac"] if boxes else None
+def box_macs(boards, role):
+    """MACs of all add-on boxes of this role (EXPLOSION, STROBO) that have a mac in boards.toml."""
+    return [b["mac"] for b in boards.values() if b["role"] == role and b["mac"]]
 
 
 def build_flags(board, boards, args):
@@ -302,9 +299,12 @@ def build_flags(board, boards, args):
         if peer:
             flags.append(mac_flag("BANGER_MAC", peer))
     if board["role"] == "BANGER":
-        box = explosion_mac(boards)
-        if box:
-            flags.append(mac_flag("EXPLOSION_MAC", box))
+        # every EXPLOSION / STROBO board in boards.toml: -D<ROLE>_COUNT=n and a flat list of MAC bytes
+        for role in ("EXPLOSION", "STROBO"):
+            macs = box_macs(boards, role)
+            if macs:
+                flags.append(f"-D{role}_COUNT={len(macs)}")
+                flags.append(f"-D{role}_MACS=" + ",".join("0x" + x for m in macs for x in m.split(":")))
     if args.log:
         flags.append("-DLOG_VERBOSE")
     if os.environ.get("DEBUG") == "1":
@@ -482,6 +482,7 @@ def cmd_update(args, boards):
               ["--additional-urls", urls, "core", "install", PLATFORM],
               ["--additional-urls", urls, "lib", "update-index"],
               ["--additional-urls", urls, "lib", "install", "DFRobotDFPlayerMini"],
+              ["--additional-urls", urls, "lib", "install", "RadioHead"],
               ["--additional-urls", urls, "lib", "upgrade"],
               ["--additional-urls", urls, "board", "list"]):
         if subprocess.run(["arduino-cli"] + c).returncode:

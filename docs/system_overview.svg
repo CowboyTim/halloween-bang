@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 980" width="1300" height="980" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 1230" width="1300" height="1230" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
   <defs>
     <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#222"/>
@@ -7,7 +7,7 @@
       <path d="M0,0 L10,5 L0,10 z" fill="#c62828"/>
     </marker>
   </defs>
-  <rect width="1300" height="980" fill="#ffffff"/>
+  <rect width="1300" height="1230" fill="#ffffff"/>
 
   <text x="40" y="46" font-size="26" font-weight="bold" fill="#1b1b1b">Halloween Bang - three units</text>
   <text x="40" y="72" font-size="14" fill="#555">All three talk over ESP-NOW. The KILLSWITCH is optional: without it the BUTTON simply works. LOCK and FREE are broadcast (no extra MAC addresses).</text>
@@ -104,4 +104,22 @@
   <text x="58" y="888" font-size="13" fill="#333">or a flat battery unlocks it within 1 s. A switch left on unlocks after 15 s (the KILLSWITCH LED then blinks fast: release it to lock again).</text>
   <text x="58" y="912" font-size="13" fill="#333">The BUTTON sends nothing back: the actor checks its lamp (dark = LOCKED, breathing = READY).</text>
   <text x="58" y="936" font-size="13" fill="#333">Dashed = optional.</text>
+
+  <!-- ===== optional add-on boxes, told about the show by the BANGER ===== -->
+  <text x="40" y="1004" font-size="22" font-weight="bold" fill="#1b1b1b">Optional add-on boxes</text>
+  <text x="40" y="1028" font-size="14" fill="#555">The BANGER tells them what it is doing. It never waits for an answer: a box that is off, out of range or broken changes nothing in the show.</text>
+
+  <rect x="40" y="1050" width="590" height="150" rx="12" fill="#e7f5ff" stroke="#1971c2" stroke-width="3" stroke-dasharray="14 8"/>
+  <text x="335" y="1084" font-size="20" font-weight="bold" fill="#1864ab" text-anchor="middle">EXPLOSION box(es)</text>
+  <text x="335" y="1106" font-size="13" fill="#555" text-anchor="middle">sound only  -  any number  -  -DEXPLOSION</text>
+  <text x="335" y="1134" font-size="14" fill="#333" text-anchor="middle">C3 SuperMini + DFPlayer Mini + speaker, same SD card</text>
+  <text x="335" y="1160" font-size="14" font-weight="bold" fill="#1864ab" text-anchor="middle">BANGER -> box:  SND1 (fuse sound starts)  /  SND2 (KABOOM sound)</text>
+  <text x="335" y="1182" font-size="12" fill="#555" text-anchor="middle">unicast, built-in LED flickers while it plays</text>
+
+  <rect x="670" y="1050" width="590" height="150" rx="12" fill="#fff0f6" stroke="#ad1457" stroke-width="3" stroke-dasharray="14 8"/>
+  <text x="965" y="1084" font-size="20" font-weight="bold" fill="#ad1457" text-anchor="middle">STROBO box(es)</text>
+  <text x="965" y="1106" font-size="13" fill="#555" text-anchor="middle">strobe only  -  any number  -  -DSTROBO</text>
+  <text x="965" y="1134" font-size="14" fill="#333" text-anchor="middle">C3 SuperMini + MOSFET + LEDs on their own supply</text>
+  <text x="965" y="1160" font-size="14" font-weight="bold" fill="#ad1457" text-anchor="middle">BANGER -> box:  STRB (the KABOOM animation starts)</text>
+  <text x="965" y="1182" font-size="12" fill="#555" text-anchor="middle">same burst as the BANGER's strobe; a new STRB within 5 s is ignored</text>
 </svg>

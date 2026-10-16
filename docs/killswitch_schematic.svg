@@ -88,4 +88,25 @@
   <text x="48" y="826" font-size="13" fill="#333">Hold (push button or switch) = the BUTTON is locked. Release = it works again at once. A lock lasts 15 s at most, even if held.</text>
   <text x="48" y="850" font-size="14" font-weight="bold" fill="#222">LED</text>
   <text x="48" y="870" font-size="13" fill="#333">on while held (locking), fast blink = 15 s are over (release it), 1 blink at power-up. The BUTTON's own lamp shows whether it is locked.</text>
+  <rect x="40" y="122" width="320" height="170" rx="8" fill="#fffdf5" stroke="#b45309" stroke-width="2" stroke-dasharray="7 4"/>
+  <text x="52" y="140" font-size="11" font-weight="bold" fill="#b45309" text-anchor="start">433 MHz transmitter</text>
+  <text x="52" y="154" font-size="11" font-weight="bold" fill="#b45309" text-anchor="start">(second path for LOCK / FREE)</text>
+  <rect x="54" y="172" width="100" height="104" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="2.5"/>
+  <text x="104" y="194" font-size="13" font-weight="bold" fill="#e65100" text-anchor="middle">STX882</text>
+  <text x="104" y="210" font-size="10" font-weight="normal" fill="#444" text-anchor="middle">433 MHz ASK</text>
+  <text x="104" y="226" font-size="10" font-weight="normal" fill="#444" text-anchor="middle">ANT: wire 17 cm</text>
+  <circle cx="154" cy="206" r="4" fill="#c62828"/>
+  <text x="148" y="210" font-size="10" font-weight="bold" fill="#c62828" text-anchor="end">VCC</text>
+  <line x1="154" y1="206" x2="184" y2="206" stroke="#c62828" stroke-width="3"/>
+  <text x="190" y="210" font-size="11" font-weight="bold" fill="#c62828" text-anchor="start">to 3.3 V pin</text>
+  <circle cx="154" cy="236" r="4" fill="#0d47a1"/>
+  <text x="148" y="240" font-size="10" font-weight="bold" fill="#0d47a1" text-anchor="end">DATA</text>
+  <line x1="154" y1="236" x2="184" y2="236" stroke="#0d47a1" stroke-width="3"/>
+  <text x="190" y="240" font-size="11" font-weight="bold" fill="#0d47a1" text-anchor="start">to GPIO 4</text>
+  <circle cx="154" cy="266" r="4" fill="#111"/>
+  <text x="148" y="270" font-size="10" font-weight="bold" fill="#111" text-anchor="end">GND</text>
+  <line x1="154" y1="266" x2="184" y2="266" stroke="#111" stroke-width="3"/>
+  <text x="190" y="270" font-size="11" font-weight="bold" fill="#111" text-anchor="start">to GND</text>
+  <text x="52" y="267" font-size="10" font-weight="normal" fill="#555" text-anchor="start">Sent on both links: ESP-NOW and 433 MHz.</text>
+  <text x="52" y="280" font-size="10" font-weight="normal" fill="#555" text-anchor="start">Tested: 100% at 4 m, 7 m (1 wall), 10 m (2 walls).</text>
 </svg>

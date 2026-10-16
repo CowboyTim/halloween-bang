@@ -20,6 +20,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - "BANG" is sent 3 times (`BANG_REPEATS`) in case a packet is lost; the BANGER plays one show only
 - Works on its own: boots **READY** and is READY again after every show (no KILLSWITCH needed)
 - Only while the actor holds the KILLSWITCH down is it **LOCKED** (lamp dark, presses thrown away). Release = READY at once. The lock also ends by itself 1 s after the KILLSWITCH stops sending (lost, out of range, flat battery) and after 15 s at most (`LOCK_MAX_MS`), even if the KILLSWITCH is still held
+- LOCK and FREE arrive over ESP-NOW and over 433 MHz (SRX882 on GPIO 6); the log line on release says which links delivered them (`lock came via: ESP-NOW 433 MHz`). Without the SRX882 wired, the 433 MHz path simply hears nothing and ESP-NOW works as before
 - The arcade button lamp is a 12 V LED with a 470 ohm series resistor inside (about 20 mA), driven low-side by a 2N2222 on GPIO 7; see `docs/button_schematic.svg`
 - Lamp (PWM): LOCKED = dark, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
 - Use: `python3 bang.py deploy button`
@@ -30,6 +31,8 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - **Hold = the BUTTON is locked, release = it works again at once.** A push button or a switch both work
 - While held it broadcasts "LOCK" every 150 ms (no MAC needed); on release it sends "FREE" 3x. The BUTTON stays locked only while LOCKs keep arriving, so a lost message, a reset or a flat battery unlocks it within 1 s
 - A lock lasts at most 15 s (`LOCK_MAX_MS`), even if the switch is left on: then the KILLSWITCH LED blinks fast; release it (and hold again) to lock again
+- **Two radio links, either one is enough:** the KILLSWITCH sends every LOCK and FREE over ESP-NOW and over a 433 MHz ASK link (STX882 on the KILLSWITCH, SRX882 on the BUTTON). Range test: ESP-NOW got 10-68% at 7 m; 433 MHz got 100% at 4 m, at 7 m through a wall and at 10 m through two walls (`tools/rf433_test/`). Both links feed the same lock timer on the BUTTON, so a lost link can only shorten a lock, never extend it. FREE is sent when the 433 MHz radio is idle (a packet takes about 70 ms on the air), 3 copies 100 ms apart
+- 433 MHz wiring: KILLSWITCH: STX882 DATA on GPIO 4, VCC on the 3.3 V pin (tested; the product page gives no supply range), GND, a straight 17 cm wire as antenna. BUTTON: SRX882 DATA through 1 kohm on GPIO 6 (its DATA swings at its 5 V supply, the S3 pins are not 5 V tolerant), VCC 5 V, GND, a 17 cm antenna wire. RadioHead also sets GPIO 4 and 5 on both boards (unused), so keep them free; the lamp pin GPIO 7 is not touched. See `docs/killswitch_schematic.svg` and `docs/button_schematic.svg`
 - The KILLSWITCH only sends. Its on-board blue LED: on while held, fast blink = lock expired, 1 blink at power-up. Whether the button is locked, the actor sees on the BUTTON's own lamp (dark = locked)
 - Optional: skip it and everything works as before
 - Needs CPU at 80 MHz or more for Wi-Fi (the firmware sets it)
@@ -48,10 +51,20 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Decoupling at the DFPlayer: a 470 uF / 16 V electrolytic (+ to 5 V) and a 100 nF ceramic across its VCC and GND pins, as close to the pins as possible (see the schematic)
 - Power the DFPlayer from **5 V**, not from the C3's 3.3 V regulator. The C3's Wi-Fi transmit peaks draw from that regulator too; a 3 W speaker on the same rail makes it sag, which can reset the C3 or distort the sound. Use the SuperMini's 5 V pin (USB) or a 5 V supply, with the grounds joined.
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.explosion]`, `python3 bang.py deploy explosion`, then `python3 bang.py deploy banger` (the BANGER needs the box's MAC at build time)
+- Several boxes are possible: list each one in `boards.toml` (`[boards.explosion]`, `[boards.explosion2]`, ...). The BANGER gets all of their MACs, so rebuild it after adding or removing a box
 - To turn it off: unpower it. No rebuild needed
 - Built-in LED (C3 SuperMini, GPIO 8): blinks while the DFPlayer is missing, and searches for it every 5 s until it is found. Lit solid once the DFPlayer is found and the box is ready, and flickers while a sound plays. The search runs in `loop()`, so the watchdog is fed between tries
 - Wiring: `docs/explosion_schematic.svg`. The C3 pins are TX GPIO 5, RX GPIO 6, BUSY GPIO 3 (UART1)
 - Status: working on the bench with the DFPlayer on 5 V. The 1 kΩ values and the BUSY idle level are not measured yet
+
+### STROBO Mode (optional strobe box)
+- An add-on box with its own ESP32 that flashes the KABOOM strobe, for a strobe the BANGER cannot be cabled to. The BANGER's own strobe output still works; the box is extra
+- The BANGER sends `STRB` when its KABOOM animation starts. The box then runs the same burst as the BANGER's strobe (starts 150 ms in, 1.5 s, about 9 flashes/s, 40 ms on), with the same `STROBE_*` constants
+- Safety: the burst ends by itself and the pin goes LOW; a new `STRB` within 5 s of a burst is ignored, so repeats or a glitch cannot keep it strobing; it boots with the strobe off
+- Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND), or a D4184 trigger module; LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
+- To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.strobo]`, `python3 bang.py deploy strobo`, then `python3 bang.py deploy banger`. Several boxes are possible, like EXPLOSION
+- Aim it away from people's eyes; flashes at 8-10 Hz are in the photosensitive-epilepsy range (see the strobe notes below)
+- Status: code and schematic written, not yet tested on hardware
 
 ## Build Commands
 
@@ -86,6 +99,7 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 | `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
 | `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button (redrawn from `button_schema.jpeg`) |
 | `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
+| `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, LEDs on their own supply |
 | `docs/explosion_schematic.svg` | EXPLOSION (optional): C3 SuperMini, DFPlayer Mini on 5 V, 3 W speaker, 1 kΩ on the DFPlayer lines |
 
 ## LED Strip Layout
