@@ -25,10 +25,10 @@ role = "BUTTON"
 # builds once and flashes whichever of them is plugged in (and says which it skipped); name one
 # ("deploy button_spare") to require that board. Plug it in, run "python3 bang.py list" or
 # "python3 bang.py identify <port>" to get its MAC, then remove the # signs:
-# [boards.button_spare]
-# mac  = "xx:xx:xx:xx:xx:xx"
-# chip = "esp32s3"
-# role = "BUTTON"
+[boards.button_spare]
+mac  = "9C:13:9E:F0:50:A4"
+chip = "esp32s3"
+role = "BUTTON"
 
 # Optional sound-only boxes (same 0001.mp3 / 0002.mp3 SD card as the BANGER). The BANGER announces
 # each sound to them. There can be several (add [boards.explosion2], ...); the BANGER gets all of
