@@ -42,7 +42,7 @@ role = "EXPLOSION"
 # Optional strobe box (add-on, for a strobe the BANGER cannot be cabled to). The BANGER tells it
 # when the KABOOM starts and it runs the same strobe burst. Several are possible, like EXPLOSION.
 [boards.strobo]
-mac  = "EC:DA:3B:BF:72:DC" # fill in with "bang.py identify <port>", then rebuild the BANGER
+mac  = "EC:DA:3B:BF:93:94" # fill in with "bang.py identify <port>", then rebuild the BANGER
 chip = "esp32c3"           # C3 SuperMini (STROBE_PIN GPIO 5, built-in LED GPIO 8)
 role = "STROBO"
 
