@@ -10,7 +10,7 @@
   <rect width="1300" height="1230" fill="#ffffff"/>
 
   <text x="40" y="46" font-size="26" font-weight="bold" fill="#1b1b1b">Halloween Bang - three units</text>
-  <text x="40" y="72" font-size="14" fill="#555">All three talk over ESP-NOW. The KILLSWITCH is optional: without it the BUTTON simply works. LOCK and FREE are broadcast (no extra MAC addresses).</text>
+  <text x="40" y="72" font-size="14" fill="#555">The units talk over ESP-NOW; the KILLSWITCH also sends LOCK / FREE over 433 MHz. The KILLSWITCH is optional: without it the BUTTON simply works.</text>
 
   <!-- ===== units ===== -->
   <rect x="40" y="100" width="300" height="230" rx="12" fill="#fff4e6" stroke="#e8590c" stroke-width="3" stroke-dasharray="14 8"/>
@@ -42,8 +42,8 @@
   <!-- ===== messages ===== -->
   <line x1="342" y1="170" x2="498" y2="170" stroke="#222" stroke-width="3.5" stroke-dasharray="10 6" marker-end="url(#arr)"/>
   <text x="420" y="152" font-size="15" font-weight="bold" fill="#222" text-anchor="middle">LOCK / FREE</text>
-  <text x="420" y="192" font-size="12" fill="#555" text-anchor="middle">broadcast: LOCK every</text>
-  <text x="420" y="208" font-size="12" fill="#555" text-anchor="middle">150 ms while held, FREE 3x</text>
+  <text x="420" y="192" font-size="12" fill="#555" text-anchor="middle">ESP-NOW + 433 MHz:</text>
+  <text x="420" y="208" font-size="12" fill="#555" text-anchor="middle">LOCK 150 ms / FREE 3x</text>
 
 
   <line x1="802" y1="215" x2="958" y2="215" stroke="#222" stroke-width="3.5" marker-end="url(#arr)"/>
@@ -103,7 +103,7 @@
   <text x="58" y="868" font-size="13" fill="#333">While held the KILLSWITCH sends LOCK every 150 ms; the BUTTON stays LOCKED only while LOCKs keep arriving. A lost FREE, a reset, out of range</text>
   <text x="58" y="888" font-size="13" fill="#333">or a flat battery unlocks it within 1 s. A switch left on unlocks after 15 s (the KILLSWITCH LED then blinks fast: release it to lock again).</text>
   <text x="58" y="912" font-size="13" fill="#333">The BUTTON sends nothing back: the actor checks its lamp (dark = LOCKED, breathing = READY).</text>
-  <text x="58" y="936" font-size="13" fill="#333">Dashed = optional.</text>
+  <text x="58" y="936" font-size="13" fill="#333">Both radio links (ESP-NOW and 433 MHz) carry LOCK / FREE: either one is enough. Dashed = optional.</text>
 
   <!-- ===== optional add-on boxes, told about the show by the BANGER ===== -->
   <text x="40" y="1004" font-size="22" font-weight="bold" fill="#1b1b1b">Optional add-on boxes</text>

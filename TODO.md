@@ -19,7 +19,7 @@ Status as of 2026-10-16. "Won't do" items are kept on purpose, so the decision a
   - line-out: does its level follow the DFPlayer volume setting?
   - 1 kohm resistors on the DFPlayer TX/BUSY lines: measure the high levels at 5 V and the pin voltage (below about 3.6 V),
   - timing offset between the BANGER's and the box's sound (phone microphone).
-- **Docs:** none of the SVGs were checked in a browser (they cannot be rendered in the build container). `system_overview.svg` needs a look.
+- **Docs:** the SVGs were rendered and checked on 2026-10-16 (resvg, DejaVu fonts) and the overlaps fixed. Look at them in a browser once as well, since fonts differ.
 - **BUTTON / KILLSWITCH** still run builds from before the watchdog handler fix; they pick it up on the next flash.
 - **Production builds:** the boards run `--log` builds (harmless). `python3 bang.py deploy all` for builds without logging.
 - **BANGER's DFPlayer** shares the strip's 5 V: listen for noise during the white flash; if there is any, give it its own 5 V feed.

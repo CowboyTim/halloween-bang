@@ -61,7 +61,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - An add-on box with its own ESP32 that flashes the KABOOM strobe, for a strobe the BANGER cannot be cabled to. The BANGER's own strobe output still works; the box is extra
 - The BANGER sends `STRB` when its KABOOM animation starts. The box then runs the same burst as the BANGER's strobe (starts 150 ms in, 1.5 s, about 9 flashes/s, 40 ms on), with the same `STROBE_*` constants
 - Safety: the burst ends by itself and the pin goes LOW; a new `STRB` within 5 s of a burst is ignored, so repeats or a glitch cannot keep it strobing; it boots with the strobe off
-- Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND), or a D4184 trigger module; LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
+- Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND). With a D4184 trigger module instead, no gate resistors: GPIO 5 goes straight to the module's trigger input (see "Strobe LED (BANGER)" for its wiring); LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.strobo]`, `python3 bang.py deploy strobo`, then `python3 bang.py deploy banger`. Several boxes are possible, like EXPLOSION
 - Aim it away from people's eyes; flashes at 8-10 Hz are in the photosensitive-epilepsy range (see the strobe notes below)
 - Status: code and schematic written, not yet tested on hardware
@@ -123,6 +123,7 @@ A 5-10 W cool-white (6000-6500 K) LED module (COB or a short dense 12 V strip, b
 Wiring with the module (follow the silkscreen on the board; the seller pages do not name the terminals):
 - ESP32 `GPIO 5` (`STROBE_PIN`) → module trigger/signal input, ESP32 GND → module trigger GND (shared with the 12 V supply GND)
 - 12 V adapter → module supply input; LED branches (with their resistors, see below) → module output terminals
+- Checked on the module in use (2026-10-16): the silkscreen shows V+ linked straight through and GND switched, and its gate resistors are already on the board, so it needs no external gate network.
 - Before wiring the LEDs: unpowered, measure continuity between the + input and + output terminals. About 0 ohm means the + side passes straight through and the - side is switched, which is what this circuit needs. Then power the module with the ESP32 unplugged and check the output stays off; if it flickers on, add a 10 kohm resistor from the trigger input to GND.
 - At 0.9 A the module is nowhere near its limits. Sellers warn a 3.3-5 V pin may not fully open the gate at the full 15 A rating, which does not matter here.
 
