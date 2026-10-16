@@ -464,7 +464,7 @@ void IRAM_ATTR button_pressed() {
 // stay LOW for WIRED_KILL_ENGAGE_MS before it counts; releasing is quick. Wiring (see the BUTTON schematic): twisted
 // pair, 2.2 kohm pull-up to 3.3 V at this end (the internal one is too weak for a long wire), 1 kohm in series
 // with the pin and 100 nF from the pin to GND.
-#define WIRED_KILL_PIN         GPIO_NUM_2   // on BUTTON
+#define WIRED_KILL_PIN         GPIO_NUM_1   // on BUTTON
 #define WIRED_KILL_ENGAGE_MS   100          // LOW at least this long = held
 #define WIRED_KILL_RELEASE_MS  30           // HIGH at least this long = released
 #endif
