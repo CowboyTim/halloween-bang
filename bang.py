@@ -387,7 +387,34 @@ def build(board, boards, args):
                    "built": time.strftime("%Y-%m-%d %H:%M:%S")}, f, indent=1)
 
 
+# Arduino libraries the sketch includes: every role needs the DFPlayer library, the BUTTON and KILLSWITCH
+# also RadioHead (433 MHz link).
+LIBS_ALL = ("DFRobotDFPlayerMini",)
+LIBS_BY_ROLE = {"BUTTON": ("RadioHead",), "KILLSWITCH": ("RadioHead",)}
+
+
+def ensure_libs(roles):
+    """Install the Arduino libraries the given roles need when they are missing (a fresh machine has none)."""
+    need = list(LIBS_ALL)
+    for r in sorted(roles):
+        need += [lib for lib in LIBS_BY_ROLE.get(r, ()) if lib not in need]
+    arduino_data_dir()
+    try:
+        r = subprocess.run(["arduino-cli", "lib", "list", "--format", "json"],
+                           capture_output=True, text=True, check=True)
+        have = {x["library"]["name"] for x in json.loads(r.stdout).get("installed_libraries", [])}
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError):
+        return          # cannot tell: let the compiler report a missing library
+    for lib in need:
+        if lib in have:
+            continue
+        print(f"== library {lib} is missing, installing it (arduino-cli lib install {lib})", flush=True)
+        if subprocess.run(["arduino-cli", "lib", "install", lib]).returncode:
+            die(f"could not install the library {lib}: run 'python3 bang.py update' or 'arduino-cli lib install {lib}'")
+
+
 def build_boards(picked, boards, args):
+    ensure_libs({b["role"] for b in picked})
     done = set()
     for b in picked:
         key = (b["chip"], b["role"])     # one build per chip + role, also for a spare board
