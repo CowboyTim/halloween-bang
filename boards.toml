@@ -47,6 +47,6 @@ chip = "esp32c3"           # C3 SuperMini (STROBE_PIN GPIO 5, built-in LED GPIO 
 role = "STROBO"
 
 [boards.killswitch]
-mac  = "9c:9e:6e:c2:f9:00"
+mac  = "EC:DA:3B:BF:72:DC"
 chip = "esp32c3"           # ESP32-C3 SuperMini
 role = "KILLSWITCH"
