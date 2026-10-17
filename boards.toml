@@ -17,7 +17,7 @@ chip = "esp32s3"           # ESP32-S3 Zero
 role = "BANGER"
 
 [boards.button]
-mac  = "d0:cf:13:30:14:14"
+mac  = "9C:13:9E:F0:50:A4"
 chip = "esp32s3"           # ESP32-S3 SuperMini (soldered in, stays S3)
 role = "BUTTON"
 
@@ -26,7 +26,7 @@ role = "BUTTON"
 # ("deploy button_spare") to require that board. Plug it in, run "python3 bang.py list" or
 # "python3 bang.py identify <port>" to get its MAC, then remove the # signs:
 [boards.button_spare]
-mac  = "9C:13:9E:F0:50:A4"
+mac  = "d0:cf:13:30:14:14"
 chip = "esp32s3"
 role = "BUTTON"
 
