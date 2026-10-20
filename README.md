@@ -99,7 +99,7 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 |------|-------|
 | `docs/system_overview.svg` | the three units, the messages between them, the BUTTON states |
 | `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
-| `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button (redrawn from `button_schema.jpeg`) |
+| `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button |
 | `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
 | `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, LEDs on their own supply |
 | `docs/explosion_schematic.svg` | EXPLOSION (optional): C3 SuperMini, DFPlayer Mini on 5 V, 3 W speaker, 1 kΩ on the DFPlayer lines |
