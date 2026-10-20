@@ -98,6 +98,7 @@
 #define KILL_BOOT_PIN       GPIO_NUM_9  // on-board BOOT button works too (held while powering up = flash mode)
 #define KILL_LED_PIN        GPIO_NUM_8  // built-in blue LED
 #define KILL_LED_ON         LOW         // it is lit when the pin is LOW
+#define KILL_EXT_LED_PIN    GPIO_NUM_10 // LED in the lock switch (3-6 V type, direct from the pin), follows the built-in LED; lit when HIGH
 // Wi-Fi TX power of the C3. Lower power was tried (8.5 dBm); at 7 m the reception was about
 // the same at every level, so full power is kept (measured at the BUTTON, 2026-10-15).
 #define KILL_TX_POWER       WIFI_POWER_19_5dBm
@@ -728,6 +729,10 @@ void killswitch_setup(){
   pinMode(KILL_BOOT_PIN, INPUT_PULLUP);
   pinMode(KILL_LED_PIN, OUTPUT);
   digitalWrite(KILL_LED_PIN, !KILL_LED_ON);
+#ifdef KILL_EXT_LED_PIN
+  pinMode(KILL_EXT_LED_PIN, OUTPUT);
+  digitalWrite(KILL_EXT_LED_PIN, LOW);
+#endif
   ks_blink_until = millis() + KILL_BLINK_MS;   // one blink at power-up: it is alive
 
   // minimal 80MHz, else ESP-NOW doesnt work on esp32s3
@@ -793,6 +798,9 @@ void do_killswitch_loop(){
   uint8_t on = ks_expired ? (now % 200) < 100
                           : (ks_stable == LOW) || (int32_t)(ks_blink_until - now) > 0;
   digitalWrite(KILL_LED_PIN, on ? KILL_LED_ON : !KILL_LED_ON);
+#ifdef KILL_EXT_LED_PIN
+  digitalWrite(KILL_EXT_LED_PIN, on ? HIGH : LOW);
+#endif
   delay(2);
 }
 // ==== BUTTON / KILLSWITCH END ====

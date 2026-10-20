@@ -2,7 +2,7 @@
   <rect width="1100" height="900" fill="#ffffff"/>
 
   <text x="30" y="44" font-size="26" font-weight="bold" fill="#1b1b1b">KILLSWITCH unit (optional) - ESP32-C3 SuperMini</text>
-  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Dashed = optional. GPIO 3 = push button, GPIO 4 = 433 MHz DATA. BOOT button and blue LED on the board.</text>
+  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Dashed = optional. GPIO 3 = push button, GPIO 10 = lock switch LED, GPIO 4 = 433 MHz DATA.</text>
 
   <!-- whole unit is optional -->
   <rect x="14" y="84" width="1072" height="684" rx="14" fill="none" stroke="#777" stroke-width="3" stroke-dasharray="14 8"/>
@@ -57,13 +57,29 @@
   <!-- ===== pins to avoid (left) ===== -->
   <rect x="40" y="440" width="300" height="200" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <text x="56" y="466" font-size="14" font-weight="bold" fill="#222">Other free pins</text>
-  <text x="56" y="488" font-size="12" fill="#333">0, 1, 7, 10 (4, 5, 6: 433 MHz link)</text>
+  <text x="56" y="488" font-size="12" fill="#333">0, 1, 7 (10: lock switch LED; 4, 5, 6: 433 MHz link)</text>
   <text x="56" y="518" font-size="14" font-weight="bold" fill="#222">Do not use</text>
   <text x="56" y="540" font-size="12" fill="#333">2, 8, 9: boot strapping</text>
   <text x="56" y="558" font-size="12" fill="#333">  (8 = blue LED, 9 = BOOT button)</text>
   <text x="56" y="576" font-size="12" fill="#333">12-17: flash chip</text>
   <text x="56" y="594" font-size="12" fill="#333">18, 19: USB</text>
   <text x="56" y="612" font-size="12" fill="#333">20, 21: serial port (boot messages)</text>
+
+  <!-- ===== lock switch LED: GPIO 10 -> LED -> GND ===== -->
+  <circle cx="630" cy="240" r="6" fill="#c2185b"/>
+  <text x="616" y="245" font-size="14" font-weight="bold" fill="#880e4f" text-anchor="end">GPIO 10</text>
+  <polyline points="630,240 695,240 695,266" fill="none" stroke="#c2185b" stroke-width="4"/>
+  <polygon points="679,266 711,266 695,292" fill="#fff" stroke="#c2185b" stroke-width="3"/>
+  <line x1="679" y1="292" x2="711" y2="292" stroke="#c2185b" stroke-width="4"/>
+  <line x1="695" y1="292" x2="695" y2="326" stroke="#111" stroke-width="4"/>
+  <line x1="675" y1="326" x2="715" y2="326" stroke="#111" stroke-width="4"/>
+  <line x1="683" y1="336" x2="707" y2="336" stroke="#111" stroke-width="4"/>
+  <line x1="689" y1="346" x2="701" y2="346" stroke="#111" stroke-width="4"/>
+  <text x="780" y="246" font-size="12" font-weight="bold" fill="#880e4f">LED in the lock switch</text>
+  <text x="780" y="264" font-size="12" fill="#444">follows the blue LED (lit when HIGH)</text>
+  <text x="780" y="282" font-size="12" fill="#444">3-6 V type, straight from the pin:</text>
+  <text x="780" y="298" font-size="12" fill="#444">measure the current, add about</text>
+  <text x="780" y="314" font-size="12" fill="#444">100 ohm if it is high</text>
 
   <!-- ===== Button branch (right): GPIO 3 -> switch -> GND ===== -->
   <polyline points="630,470 840,470 840,540" fill="none" stroke="#1565c0" stroke-width="4"/>
