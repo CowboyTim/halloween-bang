@@ -20,7 +20,7 @@ Status as of 2026-10-16 (evening). "Won't do" items are kept on purpose, so the 
   - 1 kohm resistors on the DFPlayer TX/BUSY lines: measure the high levels at 5 V and the pin voltage (below about 3.6 V),
   - timing offset between the BANGER's and the box's sound (phone microphone).
 - **BANGER's DFPlayer** shares the strip's 5 V: listen for noise during the white flash; if there is any, give it its own 5 V feed.
-- **KILLSWITCH power:** USB power bank only. Battery use untested; most C3 SuperMinis have no charger.
+- **KILLSWITCH power:** USB-C cable + power bank (decided 2026-10-20). Still to test: that the power bank does not switch itself off at the unit's low current (about 90-100 mA), over a few hours.
 
 ## Done (2026-10-16)
 
@@ -32,6 +32,7 @@ Status as of 2026-10-16 (evening). "Won't do" items are kept on purpose, so the 
 
 - **One build with the role stored in flash** (decided 2026-10-16). One build per role from `bang.py` / `boards.toml` is enough; the extra partition and the flash step are not worth it.
 - **Splitting the BANGER into a separate LED board and sound board** (decided 2026-10-16). The BANGER stays lights + sound. Extra sound goes into EXPLOSION boxes, extra strobes into STROBO boxes.
+- **Battery (LiPo, AA/AAA pack) for the KILLSWITCH** (decided 2026-10-20). USB-C + power bank is simpler: no charger, protection circuit, diode or power switch needed.
 - **ESP-01 (ESP8266) as KILLSWITCH:** too awkward to program, needs its own firmware port.
 - **ARM / guarded / COUNTDOWN design** and the countdown display that belonged to it: replaced by hold-to-lock.
 
