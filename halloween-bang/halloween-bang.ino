@@ -52,7 +52,7 @@
 #include "DFRobotDFPlayerMini.h"
 
 #ifdef EXPLOSION
-#define SOUND_VOLUME        10  // EXPLOSION box, DFPlayer volume 0-30: lowered while its DFPlayer ran from 3.3 V
+#define SOUND_VOLUME        20  // EXPLOSION box, DFPlayer volume 0-30: same as the BANGER (was 10 while its DFPlayer ran from 3.3 V)
 #else
 #define SOUND_VOLUME        20  // BANGER, DFPlayer volume 0-30
 #endif
