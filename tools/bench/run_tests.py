@@ -33,6 +33,8 @@ RESET_RE = re.compile(r"rst:|Guru Meditation|Brownout|panic|abort\(\)|Task watch
 
 # the show as the BANGER logs it: a full show is about 14 s; outside 12-17 s something is wrong
 SHOW_MIN_MS, SHOW_MAX_MS = 12000, 17000
+HEAP_DROP_MAX = 0.05       # free heap may fall at most 5 % over a run of shows
+FRAME_GAP_MAX_MS = 300     # the strip's longest stall between two frames (a stall is a frozen strip)
 HOST_SYNC_S = 0.5          # two boards' events that should be simultaneous: host arrival times within this
 
 
@@ -144,8 +146,13 @@ def test_status(boards, c):
     for b in boards.values():
         b.send("status")
     for b in boards.values():
-        hit = b.wait(rf"TEST status role={b.role}", t, 3)
+        hit = b.wait(rf"TEST status role={b.role} reset=(\w+) heap=(\d+)", t, 3)
         c.check(hit, f"{b.name} ({b.role}) answers status" + ("" if hit else " - no answer: is it the TEST build?"))
+        if hit:
+            reset = hit[1].group(1)
+            # brownout / panic / watchdog since the last flash = the board was reset by something: say so
+            c.check(reset not in ("brownout", "panic", "wdt", "glitch"),
+                    f"{b.name} last reset: {reset} (heap {hit[1].group(2)} bytes)")
     return True
 
 
@@ -190,8 +197,11 @@ def test_single_show(boards, c):
         if sent and got:
             d = got[0] - sent[0]
             c.check(abs(d) <= HOST_SYNC_S, f"{b.name} flash {d*1000:+.0f} ms against the BANGER's STRB")
-    hit = banger.find(r"Animation LED 2: DONE frames=(\d+)", t0)
-    c.check(hit and int(hit[1].group(1)) > 0, f"KABOOM animation ran ({hit[1].group(1) if hit else 'no DONE line'} frames)")
+    for n in (1, 2):
+        hit = banger.find(rf"Animation LED {n}: DONE frames=(\d+) max_gap=(\d+)", t0)
+        if c.check(hit and int(hit[1].group(1)) > 0, f"animation {n} ran ({hit[1].group(1) if hit else 'no DONE line'} frames)" if not hit else f"animation {n} ran {hit[1].group(1)} frames"):
+            gap = int(hit[1].group(2))
+            c.check(gap < FRAME_GAP_MAX_MS, f"animation {n}: longest stall between two frames {gap} ms (limit {FRAME_GAP_MAX_MS})")
     reset = [tx for b in boards.values() for _, tx in b.since(t0) if RESET_RE.search(tx)]
     c.check(not reset, "no reset or crash during the show" + (f": {reset[0]}" if reset else ""))
 
@@ -200,7 +210,7 @@ def test_repeat(boards, c, shows):
     c.begin(f"repeat: {shows} shows back to back from the BANGER (the 'few tries' failure)")
     banger = role_board(boards, "BANGER")
     expl, strobo = boards_of(boards, "EXPLOSION"), boards_of(boards, "STROBO")
-    durations = []
+    durations, heaps = [], []
     for i in range(1, shows + 1):
         t0 = time.monotonic()
         banger.send("fire")
@@ -211,9 +221,16 @@ def test_repeat(boards, c, shows):
         print(f"  show {i}: {'ok' if not failed else 'FAILED'}" + (f", {dur} ms" if dur else ""), flush=True)
         if dur:
             durations.append(dur)
+        hit = banger.find(r"SHOW done .* heap=(\d+)", t0)
+        if hit:
+            heaps.append(int(hit[1].group(1)))
         time.sleep(2)
     reset = [tx for b in boards.values() for _, tx in b.since(0) if RESET_RE.search(tx)]
     c.check(not reset, f"no reset or crash in {shows} shows" + (f": {reset[0]}" if reset else ""))
+    if len(heaps) > 1:
+        drop = heaps[0] - heaps[-1]
+        c.check(drop < HEAP_DROP_MAX * heaps[0],
+                f"free heap after {shows} shows: {heaps[0]} -> {heaps[-1]} bytes (drop {drop}, limit {HEAP_DROP_MAX:.0%})")
     if durations:
         print(f"  show length: min {min(durations)} ms, max {max(durations)} ms", flush=True)
 
@@ -278,14 +295,76 @@ def test_lock_expiry(boards, c):
     c.check(ks.wait(r"KILLSWITCH released", t, 3), "KILLSWITCH released")
 
 
+def test_mash_button(boards, c):
+    c.begin("mash_button: 30 presses during a show and its wait make exactly one show")
+    button = role_board(boards, "BUTTON")
+    banger = role_board(boards, "BANGER")
+    wait_button_ready()
+    t0 = time.monotonic()
+    LAST_FIRE[0] = t0
+    for _ in range(30):
+        button.send("fire")
+        time.sleep(0.2)
+    time.sleep(max(0, t0 + 17 - time.monotonic()))     # past the BUTTON's wait
+    bangs = len([1 for _, tx in button.since(t0) if "ADHD style sending BANG" in tx])
+    shows = len([1 for _, tx in banger.since(t0) if "SHOW start" in tx])
+    c.check(bangs == 1, f"the BUTTON sent BANG {bangs} time(s) for 30 presses (expected 1)")
+    c.check(shows == 1, f"the BANGER started {shows} show(s) (expected 1)")
+
+
+def test_lock_storm(boards, c):
+    c.begin("lock_storm: 20 quick lock/free cycles leave the BUTTON unlocked and working")
+    button = role_board(boards, "BUTTON")
+    ks = role_board(boards, "KILLSWITCH")
+    wait_button_ready()
+    t0 = time.monotonic()
+    for _ in range(20):
+        ks.send("lock")
+        time.sleep(0.25)
+        ks.send("free")
+        time.sleep(0.25)
+    time.sleep(1)
+    c.check(not ks.find(r"lock expired", t0), "no lock expired during the storm (every lock was released)")
+    t = time.monotonic()
+    button.send("fire")
+    LAST_FIRE[0] = t
+    c.check(button.wait(r"ADHD style sending BANG", t, 3), "the BUTTON fires after the storm (not stuck locked)")
+
+
+def test_lock_press_race(boards, c):
+    c.begin("lock_press_race: a lock and a press within 50 ms, 5 times: the BUTTON never ends up stuck")
+    button = role_board(boards, "BUTTON")
+    ks = role_board(boards, "KILLSWITCH")
+    for i in range(1, 6):
+        wait_button_ready()
+        t = time.monotonic()
+        ks.send("lock")
+        time.sleep(0.05)
+        button.send("fire")
+        LAST_FIRE[0] = t
+        time.sleep(0.5)
+        ks.send("free")
+        time.sleep(1)
+        ok = button.find(r"killswitch released", t) or button.find(r"ADHD style sending BANG", t)
+        c.check(ok, f"round {i}: the BUTTON is unlocked after the release")
+    wait_button_ready()
+    t = time.monotonic()
+    button.send("fire")
+    LAST_FIRE[0] = t
+    c.check(button.wait(r"ADHD style sending BANG", t, 3), "the BUTTON fires after the races")
+
+
 TESTS = {
     "single_show": (test_single_show, ["BUTTON", "BANGER"]),
     "repeat": (test_repeat, ["BANGER"]),
+    "mash_button": (test_mash_button, ["BUTTON", "BANGER"]),
+    "lock_storm": (test_lock_storm, ["BUTTON", "KILLSWITCH"]),
+    "lock_press_race": (test_lock_press_race, ["BUTTON", "KILLSWITCH"]),
     "lock": (test_lock, ["BUTTON", "KILLSWITCH"]),
     "lock_during_show": (test_lock_during_show, ["BUTTON", "BANGER", "KILLSWITCH"]),
     "lock_expiry": (test_lock_expiry, ["BUTTON", "KILLSWITCH"]),
 }
-ORDER = ["single_show", "repeat", "lock", "lock_during_show", "lock_expiry"]
+ORDER = ["single_show", "repeat", "mash_button", "lock", "lock_storm", "lock_press_race", "lock_during_show", "lock_expiry"]
 
 
 def main():

@@ -1094,9 +1094,26 @@ static const char *test_role_name(){
 #endif
 }
 
+// why the chip last started: "poweron", "brownout", "panic", "wdt" ... (esp_reset_reason_t)
+static const char *test_reset_name(){
+  switch(esp_reset_reason()){
+    case ESP_RST_POWERON:   return "poweron";
+    case ESP_RST_SW:        return "sw";
+    case ESP_RST_PANIC:     return "panic";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:       return "wdt";
+    case ESP_RST_BROWNOUT:  return "brownout";
+    case ESP_RST_USB:       return "usb";
+    case ESP_RST_PWR_GLITCH:return "glitch";
+    default:                return "other";
+  }
+}
+
 static void test_command(const char *cmd){
   if(!strcmp(cmd, "status")){
-    LOG("TEST status role=%s ms=%lu", test_role_name(), (unsigned long)millis());
+    LOG("TEST status role=%s reset=%s heap=%lu ms=%lu", test_role_name(), test_reset_name(),
+        (unsigned long)ESP.getFreeHeap(), (unsigned long)millis());
   } else if(!strcmp(cmd, "fire")){
     LOG("TEST fire ms=%lu", (unsigned long)millis());
 #ifdef BUTTON
@@ -1263,7 +1280,8 @@ void play_something() {
   wait_sound_end(SOUND_2);
 
   // done
-  LOG("SHOW done ms=%lu duration=%lu", (unsigned long)millis(), (unsigned long)(millis() - show_t0));
+  LOG("SHOW done ms=%lu duration=%lu heap=%lu", (unsigned long)millis(), (unsigned long)(millis() - show_t0),
+      (unsigned long)ESP.getFreeHeap());
   LOG("done showing demolition animation");
   animation_is_running = 0;
   trigger_animation = 0;
@@ -1421,11 +1439,14 @@ void run_ledstrip_animation_1() {
   float ringStart = fuse_cross_ms();
   uint32_t buildDone = (uint32_t)(ringStart + RING_IGNITE_MS + BUILDUP_MIN_MS);
   uint32_t t0 = millis();
-  uint32_t frames = 0;
+  uint32_t frames = 0, last_frame = t0, max_gap = 0;   // max_gap: the longest stall between two frames
 
   for (;;) {
     doYIELD;
     frames++;
+    uint32_t now_f = millis();
+    if (now_f - last_frame > max_gap) max_gap = now_f - last_frame;
+    last_frame = now_f;
     uint32_t ms = millis() - t0;
     strip.clear();
     draw_fuse(ms);
@@ -1440,7 +1461,7 @@ void run_ledstrip_animation_1() {
     }
     delay(2);
   }
-  LOG("RUNNING Animation LED 1: DONE frames=%lu", (unsigned long)frames);
+  LOG("RUNNING Animation LED 1: DONE frames=%lu max_gap=%lu", (unsigned long)frames, (unsigned long)max_gap);
 }
 
 // -------------------------------------------------------------------------
@@ -1502,11 +1523,14 @@ void do_strobo_loop(){
 void run_ledstrip_animation_2() {
   LOG("RUNNING Animation LED 2: KABOOM");
   uint32_t t0 = millis();
-  uint32_t frames = 0;
+  uint32_t frames = 0, last_frame = t0, max_gap = 0;
 
   for (;;) {
     doYIELD;
     frames++;
+    uint32_t now_f = millis();
+    if (now_f - last_frame > max_gap) max_gap = now_f - last_frame;
+    last_frame = now_f;
     uint32_t ms = millis() - t0;
     if (ms >= KABOOM_TOTAL_MS) break;
     strip.clear();
@@ -1555,7 +1579,7 @@ void run_ledstrip_animation_2() {
 
   strip.clear();
   strip.show();
-  LOG("RUNNING Animation LED 2: DONE frames=%lu", (unsigned long)frames);
+  LOG("RUNNING Animation LED 2: DONE frames=%lu max_gap=%lu", (unsigned long)frames, (unsigned long)max_gap);
 }
 // ==== ANIMATIONS END ====
 
