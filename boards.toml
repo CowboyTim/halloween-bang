@@ -23,15 +23,14 @@ role = "BUTTON"
 
 # A spare BUTTON (identical, same firmware). With two boards of a role, "python3 bang.py deploy button"
 # builds once and flashes whichever of them is plugged in (and says which it skipped); name one
-# ("deploy button_spare") to require that board. Plug it in, run "python3 bang.py list" or
-# "python3 bang.py identify <port>" to get its MAC, then remove the # signs:
+# ("deploy button_spare") to require that board.
 [boards.button_spare]
 mac  = "d0:cf:13:30:14:14"
 chip = "esp32s3"
 role = "BUTTON"
 
 # Optional sound-only boxes (same 0001.mp3 / 0002.mp3 SD card as the BANGER). The BANGER announces
-# each sound to them. There can be several (add [boards.explosion2], ...); the BANGER gets all of
+# each sound to them. There can be several (add [boards.explosion_3], ...); the BANGER gets all of
 # their MACs, so rebuild it after adding or removing one. Unpower a box, or leave it out, and the
 # show runs the same.
 [boards.explosion]
@@ -44,11 +43,11 @@ mac  = "9C:9E:6E:C2:F9:00"
 chip = "esp32c3"           # C3 SuperMini (pins: see the EXPLOSION block in the sketch)
 role = "EXPLOSION"
 
-# Optional strobe box (add-on, for a strobe the BANGER cannot be cabled to). The BANGER tells it
-# when the KABOOM starts and it runs the same strobe burst. Several are possible, like EXPLOSION.
+# Optional strobe box (add-on, for a flash the BANGER cannot be cabled to). The BANGER tells it
+# when the KABOOM starts and it fires one flash. Several are possible, like EXPLOSION (rebuild the BANGER).
 [boards.strobo]
-mac  = "EC:DA:3B:BF:93:94" # fill in with "bang.py identify <port>", then rebuild the BANGER
-chip = "esp32c3"           # C3 SuperMini (STROBE_PIN GPIO 5, built-in LED GPIO 8)
+mac  = "EC:DA:3B:BF:93:94"
+chip = "esp32c3"           # C3 SuperMini (flash pin GPIO 5 (PWM), built-in LED GPIO 8)
 role = "STROBO"
 
 [boards.killswitch]
