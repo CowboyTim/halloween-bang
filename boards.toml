@@ -24,6 +24,8 @@ role = "BUTTON"
 # A spare BUTTON (identical, same firmware). With two boards of a role, "python3 bang.py deploy button"
 # builds once and flashes whichever of them is plugged in (and says which it skipped); name one
 # ("deploy button_spare") to require that board.
+# NOTE: this spare BUTTON is now used for another project. It stays here so its MAC is not lost; it is
+# not part of the show, and "deploy button" does not need it.
 [boards.button_spare]
 mac  = "d0:cf:13:30:14:14"
 chip = "esp32s3"
