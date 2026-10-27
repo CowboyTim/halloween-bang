@@ -46,4 +46,7 @@ Known results:
 - 2026-10-27, `single_show` + `repeat --shows 15` (BANGER, EXPLOSION x2, STROBO, BUTTON spare): all
   checks pass, show length 14134-14141 ms. Before the fix to the DFPlayer search, one EXPLOSION box (no
   DFPlayer answering) hung in its search and was rebooted by the watchdog after 60 s (run
-  `tools/bench/out/20261027-092840`). The lock tests have not been run yet (no KILLSWITCH connected).
+  `tools/bench/out/20261027-092840`). 2026-10-27, lock tests (KILLSWITCH, BUTTON spare, BANGER, EXPLOSION x2, STROBO): `lock`, `lock_during_show`
+  and `lock_expiry` all pass, 19 of 19 checks in the last run (`tools/bench/out/20261027-095358`). The
+  KILLSWITCH expires its lock at 15.2 s; the BUTTON unlocks at the same moment, from the FREE the KILLSWITCH
+  sends at its expiry (its own expiry message may not show up in the log).

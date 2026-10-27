@@ -128,6 +128,14 @@ def boards_of(boards, role):
 LAST_FIRE = [0.0]      # host time of the last "fire" to the BUTTON: it waits WAIT_TIME_BUTTON (16 s) after a show
 
 
+def wait_button_ready():
+    """The BUTTON takes a press only WAIT_TIME_BUTTON (16 s) after the last one: wait that out."""
+    if LAST_FIRE[0]:
+        left = LAST_FIRE[0] + 17 - time.monotonic()
+        if left > 0:
+            time.sleep(left)
+
+
 # ---- tests --------------------------------------------------------------------------------------
 
 def test_status(boards, c):
@@ -214,9 +222,7 @@ def test_lock(boards, c):
     c.begin("lock: KILLSWITCH held locks the BUTTON, released unlocks it")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
-    # the BUTTON only takes a press while READY: wait out a show from an earlier test
-    if LAST_FIRE[0]:
-        button.wait(r"BUTTON state 3 -> 2", LAST_FIRE[0], 20)
+    wait_button_ready()
     t = time.monotonic()
     ks.send("lock")
     c.check(ks.wait(r"KILLSWITCH held: sending LOCK", t, 3), "KILLSWITCH sends LOCK")
@@ -241,6 +247,7 @@ def test_lock_during_show(boards, c):
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
     banger = role_board(boards, "BANGER")
+    wait_button_ready()
     t0 = time.monotonic()
     button.send("fire")
     LAST_FIRE[0] = t0
@@ -264,7 +271,9 @@ def test_lock_expiry(boards, c):
     ks.send("lock")
     hit = ks.wait(r"lock expired", t, 25)
     c.check(hit and 13 <= hit[0] - t <= 18, f"KILLSWITCH expires the lock at {(hit[0]-t) if hit else float('nan'):.1f} s")
-    c.check(button.wait(r"lock expired", t, 25), "BUTTON expires the lock as well")
+    # the KILLSWITCH's FREE at the expiry may reach the BUTTON before its own timer: either ends the lock
+    hit = button.wait(r"lock expired|killswitch released", t, 25)
+    c.check(hit and 13 <= hit[0] - t <= 18, "BUTTON is unlocked at the same time (its own expiry or the FREE)")
     ks.send("free")
     c.check(ks.wait(r"KILLSWITCH released", t, 3), "KILLSWITCH released")
 

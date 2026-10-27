@@ -1491,8 +1491,9 @@ void do_strobo_loop(){
     LOG("STRB: flash off ms=%lu", (unsigned long)now);
   }
 #ifdef EXPL_LED_PIN
-  // LED: lit when ready, flickers during the burst
-  uint8_t led_on = strobo_t0 ? ((((now / EXPL_FLICKER_MS) * 2654435761u) >> 24) & 1) : 1;
+  // LED: lit when ready, goes dark for the flash. The 12 V strobe LEDs need the 12 V brick, so on USB-C
+  // power alone this blink is the only sign that the flash fired
+  uint8_t led_on = strobo_t0 ? 0 : 1;
   digitalWrite(EXPL_LED_PIN, led_on ? EXPL_LED_ON : !EXPL_LED_ON);
 #endif
   delay(1);
