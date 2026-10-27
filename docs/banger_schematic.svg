@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 1060" width="1300" height="1060" font-family="DejaVu Sans, Helvetica, Arial, sans-serif">
   <rect width="1300" height="1060" fill="#ffffff"/>
   <text x="30" y="40" font-size="26" font-weight="bold" fill="#1b1b1b">BANGER unit - ESP32-S3 Zero</text>
-  <text x="30" y="64" font-size="14" fill="#555">Build flag -DBANGER. Dashed boxes are optional. Pin positions are simplified, see esp32s3_zero.pinout.png.</text>
+  <text x="30" y="64" font-size="14" fill="#555">Build flag -DBANGER. Sound goes to the EXPLOSION box(es). DFPlayer optional (-DBANGER_DFPLAYER). No strobe here.</text>
 
   <!-- ===== rails ===== -->
   <line x1="380" y1="190" x2="1210" y2="190" stroke="#c62828" stroke-width="4"/>
   <text x="392" y="182" font-size="13" font-weight="bold" fill="#c62828">5 V</text>
   <line x1="20" y1="940" x2="1270" y2="940" stroke="#111" stroke-width="4"/>
-  <text x="32" y="932" font-size="13" font-weight="bold" fill="#111">GND (common to everything, also the 12 V strobe supply)</text>
+  <text x="32" y="932" font-size="13" font-weight="bold" fill="#111">GND (common to everything)</text>
 
   <!-- supply -->
   <rect x="40" y="90" width="300" height="56" rx="8" fill="#fff0f0" stroke="#c62828" stroke-width="2.5"/>
@@ -33,11 +33,11 @@
   <circle cx="500" cy="480" r="6" fill="#ef6c00"/><text x="514" y="485" font-size="13" font-weight="bold" fill="#e65100">GPIO 7 (BUSY in)</text>
   <!-- right pins -->
   <circle cx="740" cy="320" r="6" fill="#00838f"/><text x="726" y="325" font-size="13" font-weight="bold" fill="#006064" text-anchor="end">GPIO 4 (strip data)</text>
-  <circle cx="740" cy="560" r="6" fill="#ad1457"/><text x="726" y="565" font-size="13" font-weight="bold" fill="#880e4f" text-anchor="end">GPIO 5 (strobe)</text>
 
   <!-- ===== DFPlayer ===== -->
   <rect x="60" y="330" width="240" height="220" rx="10" fill="#fff8e1" stroke="#f9a825" stroke-width="3"/>
-  <text x="180" y="376" font-size="16" font-weight="bold" fill="#e65100" text-anchor="middle">DFPlayer Mini</text>
+  <text x="180" y="376" font-size="16" font-weight="bold" fill="#e65100" text-anchor="middle">DFPlayer (optional)</text>
+  <text x="180" y="394" font-size="11" fill="#555" text-anchor="middle">only with -DBANGER_DFPLAYER</text>
   <text x="180" y="500" font-size="12" fill="#444" text-anchor="middle">micro SD card (FAT32)</text>
   <text x="180" y="518" font-size="12" fill="#444" text-anchor="middle">0001.mp3  0002.mp3</text>
   <text x="290" y="385" font-size="12" font-weight="bold" fill="#333" text-anchor="end">RX</text>
@@ -133,8 +133,8 @@
   <text x="1238" y="260" font-size="14" font-weight="bold" fill="#c62828">+</text>
   <line x1="1210" y1="274" x2="1210" y2="380" stroke="#111" stroke-width="4"/>
   <circle cx="1210" cy="190" r="4" fill="#c62828"/><circle cx="1210" cy="380" r="4" fill="#111"/>
-  <text x="1200" y="210" font-size="12" font-weight="bold" fill="#333" text-anchor="end">1000 uF</text>
-  <text x="1200" y="224" font-size="11" fill="#444" text-anchor="end">10-16 V rated</text>
+  <text x="1200" y="210" font-size="12" font-weight="bold" fill="#333" text-anchor="end">470-1000 uF</text>
+  <text x="1200" y="224" font-size="11" fill="#444" text-anchor="end">16 V rated (470 uF ok)</text>
   <text x="1200" y="238" font-size="11" fill="#444" text-anchor="end">+ to 5 V</text>
   <text x="1200" y="252" font-size="11" fill="#444" text-anchor="end">at strip start</text>
 
@@ -144,68 +144,9 @@
   <text x="912" y="468" font-size="12" fill="#444">2nd 5 V + GND feed at LED 120</text>
   <text x="912" y="482" font-size="12" fill="#444">(fuse / ring joint)</text>
 
-  <!-- ===== optional strobe group ===== -->
-  <rect x="760" y="520" width="470" height="370" rx="12" fill="#fafafa" stroke="#777" stroke-width="2.5" stroke-dasharray="12 7"/>
-  <text x="776" y="544" font-size="13" font-weight="bold" fill="#777">OPTIONAL</text>
-  <text x="776" y="562" font-size="12" fill="#444">strobe flash on KABOOM</text>
-  <polyline points="740,560 785,560 785,640 810,640" fill="none" stroke="#ad1457" stroke-width="4"/>
-  <circle cx="810" cy="640" r="5" fill="#ad1457"/>
-  <rect x="810" y="590" width="170" height="230" rx="8" fill="#fce4ec" stroke="#ad1457" stroke-width="3"/>
-  <text x="895" y="614" font-size="13" font-weight="bold" fill="#880e4f" text-anchor="middle">"D4184" MOSFET</text>
-  <text x="895" y="630" font-size="12" font-weight="bold" fill="#880e4f" text-anchor="middle">trigger module</text>
-  <text x="818" y="660" font-size="11" font-weight="bold" fill="#333">SIG in</text>
-  <text x="818" y="710" font-size="11" font-weight="bold" fill="#333">GND</text>
-  <text x="972" y="790" font-size="11" font-weight="bold" fill="#333" text-anchor="end">OUT -</text>
-  <text x="895" y="740" font-size="10" fill="#555" text-anchor="middle">AOD4184A inside,</text>
-  <text x="895" y="754" font-size="10" fill="#555" text-anchor="middle">switches the - side.</text>
-  <text x="895" y="768" font-size="10" fill="#555" text-anchor="middle">Follow its silkscreen.</text>
-  <!-- module GND, input side (trigger GND) -->
-  <circle cx="810" cy="690" r="5" fill="#111"/>
-  <polyline points="810,690 780,690 780,940" fill="none" stroke="#111" stroke-width="3"/>
-  <!-- 12 V adapter -->
-  <rect x="1000" y="526" width="210" height="44" rx="8" fill="#fff3e0" stroke="#e65100" stroke-width="2.5"/>
-  <text x="1105" y="546" font-size="14" font-weight="bold" fill="#e65100" text-anchor="middle">12 V adapter, 15 W</text>
-  <text x="1105" y="562" font-size="11" fill="#444" text-anchor="middle">its own supply</text>
-  <polyline points="1030,570 1030,580" fill="none" stroke="#e65100" stroke-width="4"/>
-  <line x1="1160" y1="580" x2="880" y2="580" stroke="#e65100" stroke-width="4"/>
-  <line x1="880" y1="580" x2="880" y2="590" stroke="#e65100" stroke-width="4"/>
-  <text x="1170" y="576" font-size="11" font-weight="bold" fill="#e65100">12 V</text>
-  <polyline points="1210,548 1224,548 1224,940" fill="none" stroke="#111" stroke-width="3"/>
-  <circle cx="1224" cy="940" r="5" fill="#111"/>
-  <!-- three branches -->
-  <g stroke="#e65100" stroke-width="3" fill="none">
-    <line x1="1000" y1="580" x2="1000" y2="612"/><line x1="1080" y1="580" x2="1080" y2="612"/><line x1="1160" y1="580" x2="1160" y2="612"/>
-    <line x1="1000" y1="652" x2="1000" y2="690"/><line x1="1080" y1="652" x2="1080" y2="690"/><line x1="1160" y1="652" x2="1160" y2="690"/>
-    <line x1="1000" y1="740" x2="1000" y2="790"/><line x1="1080" y1="740" x2="1080" y2="790"/><line x1="1160" y1="740" x2="1160" y2="790"/>
-    <line x1="1160" y1="790" x2="980" y2="790"/>
-  </g>
-  <g fill="#fff" stroke="#e65100" stroke-width="3">
-    <rect x="990" y="612" width="20" height="40"/><rect x="1070" y="612" width="20" height="40"/><rect x="1150" y="612" width="20" height="40"/>
-  </g>
-  <g fill="#fffde7" stroke="#e65100" stroke-width="3">
-    <rect x="975" y="690" width="50" height="50" rx="6"/><rect x="1055" y="690" width="50" height="50" rx="6"/><rect x="1135" y="690" width="50" height="50" rx="6"/>
-  </g>
-  <text x="1000" y="720" font-size="11" font-weight="bold" fill="#e65100" text-anchor="middle">COB</text>
-  <text x="1080" y="720" font-size="11" font-weight="bold" fill="#e65100" text-anchor="middle">COB</text>
-  <text x="1160" y="720" font-size="11" font-weight="bold" fill="#e65100" text-anchor="middle">COB</text>
-  <text x="1014" y="636" font-size="11" fill="#444">10 ohm</text>
-  <text x="1094" y="636" font-size="11" fill="#444">10 ohm</text>
-  <text x="1174" y="636" font-size="11" fill="#444">10 ohm</text>
-  <text x="1090" y="814" font-size="11" fill="#444" text-anchor="middle">3 chips (3 W, 9-11 V),</text>
-  <text x="1090" y="828" font-size="11" fill="#444" text-anchor="middle">each with its own 10 ohm 2 W resistor</text>
-  <circle cx="980" cy="790" r="5" fill="#ad1457"/>
-  <!-- module 12V return to GND -->
-  <circle cx="880" cy="820" r="5" fill="#111"/>
-  <polyline points="880,820 880,940" fill="none" stroke="#111" stroke-width="3"/>
-  <text x="890" y="858" font-size="11" fill="#444">12 V return,</text>
-  <text x="890" y="872" font-size="11" fill="#444">tied to GND</text>
-  <circle cx="880" cy="940" r="5" fill="#111"/>
-
   <!-- ===== legend ===== -->
   <rect x="30" y="965" width="1240" height="80" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <rect x="46" y="979" width="46" height="24" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="8 5"/>
   <text x="104" y="996" font-size="13" fill="#333">dashed = optional part.</text>
-  <text x="300" y="996" font-size="13" fill="#333">DFPlayer TX and BUSY: 1 kohm each (DFPlayer on 5 V). ESP TX: 1 kohm optional.</text>
-  <text x="46" y="1020" font-size="13" fill="#333">The strobe supply shares GND with the ESP32 and nothing else. Aim the strobe at the ring or smoke, never at people's eyes (flashes at 8-10 Hz).</text>
-  <text x="46" y="1038" font-size="12" fill="#555">Strobe alternative without the module: a logic-level N-MOSFET (IRLZ44N): GPIO 5, then 100-220 ohm to the gate, 10 kohm gate to GND, source to GND, drain to LED -.</text>
+  <text x="300" y="996" font-size="13" fill="#333">With -DBANGER_DFPLAYER: DFPlayer TX and BUSY 1 kohm each (DFPlayer on 5 V). ESP TX: 1 kohm optional.</text>
 </svg>

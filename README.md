@@ -9,8 +9,8 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 ### BANGER Mode (default)
 - Receives "BANG" messages via ESP-NOW from other devices
 - Plays sound effects and LED animations when triggered wirelessly
-- Without a working DFPlayer (not wired, no SD card, BUSY pin stuck) it still plays the full light show and strobe, just silent. Boot gives up on the DFPlayer after 3 tries (about 10 s); reboot the BANGER to get sound back after fixing it
-- Status LED: the S3 Zero's built-in RGB LED (a WS2812 on GPIO 21, bit-banged because the strip owns the RMT peripheral) shows dim green when ready, flickers orange while the show runs, and blinks yellow while the DFPlayer is missing
+- No DFPlayer on the BANGER in the default build: the light show runs on its own timers and the sound comes from the EXPLOSION box(es). Build with `-DBANGER_DFPLAYER` (`python3 bang.py build banger --flags=-DBANGER_DFPLAYER`) to put a DFPlayer back on the BANGER: then it boots with 3 tries (about 10 s), and without a working DFPlayer it still plays the full light show, just silent; reboot to get its sound back
+- Status LED: the S3 Zero's built-in RGB LED (a WS2812 on GPIO 21, bit-banged because the strip owns the RMT peripheral) shows dim green when ready, flickers orange while the show runs, and, only in a `-DBANGER_DFPLAYER` build, blinks yellow while the DFPlayer is missing
 - Use: `python3 bang.py deploy banger`
 - Status: built, flashed and working on the real board
 
@@ -61,10 +61,10 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Status: working on the bench with the DFPlayer on 5 V. The 1 kΩ values and the BUSY idle level are not measured yet
 
 ### STROBO Mode (optional strobe box)
-- An add-on box with its own ESP32 that flashes the KABOOM strobe, for a strobe the BANGER cannot be cabled to. The BANGER's own strobe output still works; the box is extra
-- The BANGER sends `STRB` when its KABOOM animation starts. The box then runs the same burst as the BANGER's strobe (starts 150 ms in, 1.5 s, about 9 flashes/s, 40 ms on), with the same `STROBE_*` constants
-- Safety: the burst ends by itself and the pin goes LOW; a new `STRB` within 5 s of a burst is ignored, so repeats or a glitch cannot keep it strobing; it boots with the strobe off
-- Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND). With a D4184 trigger module instead, no gate resistors: GPIO 5 goes straight to the module's trigger input (see "Strobe LED (BANGER)" for its wiring); LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
+- An add-on box with its own ESP32 that fires one flash at the KABOOM, for a flash the BANGER cannot be cabled to. The BANGER has no strobe of its own; the box is extra
+- The BANGER sends `STRB` when its KABOOM animation starts. The box then fires ONE flash of `STROBO_FLASH_MS` (150 ms) at `STROBO_BRIGHTNESS` (0-255, PWM on the gate: 255 = full, lower = dimmer). No strobing: a single flash, so nobody gets a flashing sequence
+- Safety: the flash ends by itself and the PWM goes to 0; a new `STRB` within 5 s of a flash is ignored, so repeats or a glitch cannot re-fire it; it boots with the output off
+- Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND). With a D4184 trigger module instead, no gate resistors: GPIO 5 goes straight to the module's trigger input (see "Strobe LED (STROBO box)" for its wiring); LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.strobo]`, `python3 bang.py deploy strobo`, then `python3 bang.py deploy banger`. Several boxes are possible, like EXPLOSION
 - Aim it away from people's eyes; flashes at 8-10 Hz are in the photosensitive-epilepsy range (see the strobe notes below)
 - Status: works on the bench (tested 2026-10-16); the LED type, count and supply for the real strobe are still to be chosen
@@ -100,10 +100,10 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 | File | Shows |
 |------|-------|
 | `docs/system_overview.svg` | the three units, the messages between them, the BUTTON states |
-| `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, DFPlayer + speaker, optional strobe |
+| `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, master trigger (DFPlayer only with `-DBANGER_DFPLAYER`) |
 | `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button |
 | `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
-| `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, LEDs on their own supply |
+| `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, 3 LED chips on their own 12 V supply, one flash |
 | `docs/explosion_schematic.svg` | EXPLOSION (optional): C3 SuperMini, DFPlayer Mini on 5 V, 3 W speaker, 1 kΩ on the DFPlayer lines |
 
 ## LED Strip Layout
@@ -119,7 +119,7 @@ The fuse enters the ring at LED 120 and LED 299 sits right next to it (keep a no
 
 Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and a 1000 uF electrolytic capacitor (10-16 V rated, + to 5 V) across 5 V / GND at the strip start (see `docs/banger_schematic.svg`). The 330 ohm protects the first LED, the capacitor absorbs the current steps of the white flash. A 74AHCT125 level shifter on the data line is the proper fix if the first LEDs flicker, since the ESP32 outputs 3.3 V and a 5 V WS2812B formally wants about 3.5 V. The DFPlayer runs from 5 V, so its TX and BUSY lines each need 1 kohm in series (required; the ESP pins are not 5 V tolerant). No pull-down on BUSY. The 1 kohm on ESP TX -> DFPlayer RX is optional (can reduce hiss). Put 470 uF / 16 V (+ to 5 V) and 100 nF across the DFPlayer's VCC and GND pins, right at the pins (see `docs/banger_schematic.svg`).
 
-## Strobe LED (BANGER)
+## Strobe LED (STROBO box)
 
 A 5-10 W cool-white (6000-6500 K) LED module (COB or a short dense 12 V strip, behind a diffuser) is switched on its negative side by a MOSFET. Chosen switch: a ready-made **"D4184" MOSFET trigger module** (8-pack from Amazon, sold as "DC MOSFET Modules 5V-36V 400W 15A ... Dual Driver PWM"). The chips marked D4184 are AOS AOD4184(A), 40 V / 50 A N-channel, two in parallel on one output; trigger input 3.3-20 V (PWM up to 20 kHz), load supply 5-36 V. Despite "dual" it is one switched output per board, and the listing's "IRLZ44N" is just keyword stuffing. Do **not** confuse it with the ON Semi "D4184", a P-channel MOSFET + Schottky part that does not fit this circuit.
 
@@ -164,11 +164,11 @@ Both animations are in `halloween-bang.ino` between `ANIMATIONS BEGIN/END`. Ever
 
 **Animation 2 (during sound 2, ~3.8 s)**
 1. **KABOOM:** white flash on the ring (the vampire disappears here) and a shockwave racing back down the fuse.
-2. **Strobe burst (150-1650 ms):** a separate white strobe LED flashes about 9 times per second (40 ms on) over the slide-whistle vanish, so the vampire can step out between flashes (`STROBE_ENABLED 0` disables it).
+2. **Flash:** the optional STROBO box fires one short white flash (150 ms) at the KABOOM. The BANGER has no strobe of its own.
 3. **Cool down:** fireball fades through orange to dying embers.
 4. **Ghost wisp:** a purple wisp drifts back along the fuse, then everything goes dark.
 
-Total show length is about 14.5 s (10.3 s + 4.0 s, plus DFPlayer start latency).
+Total show length is about 14 s (10.3 s + 4.0 s). With `-DBANGER_DFPLAYER` it is about 14.5 s, the extra time being the DFPlayer's own start latency.
 
 ## Audio Setup (MP3 for DFPlayer Mini)
 
@@ -240,7 +240,7 @@ To test a card: boot the board with logging on (`python3 bang.py monitor banger`
 ## Development Notes
 
 ### Board GPIO Pinouts
-- **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 12/13 (DFPlayer TX/RX), GPIO 7 (BUSY pin), GPIO 21 (builtin LED), GPIO 8 (button input pullup)
+- **BANGER mode**: Requires **ESP32 S3 Zero** - uses GPIO 4 (LED strip DIN), GPIO 21 (builtin LED). With `-DBANGER_DFPLAYER` also GPIO 12/13 (DFPlayer TX/RX) and GPIO 7 (BUSY pin)
 - **KILLSWITCH mode**: **ESP32-C3 SuperMini** - GPIO 3 button (and the on-board BOOT button, GPIO 9), on-board blue LED (GPIO 8). Avoid GPIO 2/8/9 (strapping), 12-17 (flash), 18/19 (USB), 20/21 (serial). An S3 build keeps GPIO 8 button / GPIO 7 LED
 - **BUTTON mode**: Requires **ESP32 S3 SuperMini** - same GPIO assignments for button input and ESP-NOW communication
 

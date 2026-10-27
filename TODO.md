@@ -11,15 +11,15 @@ Status as of 2026-10-16 (evening). "Won't do" items are kept on purpose, so the 
   - solder the SRX882 into the BUTTON (5 V, DATA via 1 kohm to GPIO 6, 17 cm antenna) and the STX882 into the KILLSWITCH; mount the antennas straight and away from metal,
   - check the STX882's supply range (3.3 V works; 5 V would give more power, but only after the datasheet allows it).
 - **Wired killswitch on the BUTTON (GPIO 1):** code and schematic done, filter tested off-board, short-cable bench test OK (2026-10-16), not yet tried with the real 10 m cable. Still to test with the real cable: no false locks near mains cables or the strobe supply, release feels instant, shorting the wire expires after 15 s.
-- **STROBO box** (add-on): works on the bench (tested 2026-10-16). Still to do: choose the LEDs and their drive values, solder it, rebuild the BANGER with the final box MACs, and check a full show with the box at its real place (`docs/strobo_schematic.svg`).
+- **STROBO box** (add-on): one flash at the KABOOM now (150 ms, PWM brightness `STROBO_BRIGHTNESS`), no strobing (2026-10-27). Connected and flashed. Still to do: choose the brightness on site, check a full show with the box at its real place (`docs/strobo_schematic.svg`).
 - **Boxes:** decided 2026-10-16: one EXPLOSION box and one STROBO box. The code still supports any number (one `[boards.*]` entry each).
 - **Tests still to do:**
-  - BANGER show without a DFPlayer / SD card (the strip should run the full ~14 s),
+  - BANGER show without a DFPlayer (now the default build; the strip should run the full ~14 s, boot without the DFPlayer wait),
   - BANGER with the EXPLOSION box off (the show must not be delayed),
   - line-out: does its level follow the DFPlayer volume setting?
   - 1 kohm resistors on the DFPlayer TX/BUSY lines: measure the high levels at 5 V and the pin voltage (below about 3.6 V),
   - timing offset between the BANGER's and the box's sound (phone microphone).
-- **BANGER's DFPlayer** shares the strip's 5 V: listen for noise during the white flash; if there is any, give it its own 5 V feed.
+- **BANGER's DFPlayer** (only with `-DBANGER_DFPLAYER`, not in the default build): if it is used, listen for noise during the white flash; if there is any, give it its own 5 V feed.
 - **KILLSWITCH power:** USB-C cable + power bank (decided 2026-10-20). Still to test: that the power bank does not switch itself off at the unit's low current (about 90-100 mA), over a few hours.
 
 ## Done (2026-10-16)

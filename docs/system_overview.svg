@@ -35,8 +35,8 @@
   <text x="1110" y="136" font-size="22" font-weight="bold" fill="#1864ab" text-anchor="middle">BANGER</text>
   <text x="1110" y="158" font-size="13" fill="#555" text-anchor="middle">the ring  -  build flag -DBANGER</text>
   <text x="1110" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 Zero</text>
-  <text x="1110" y="224" font-size="14" fill="#333" text-anchor="middle">300 WS2812B LEDs + DFPlayer</text>
-  <text x="1110" y="248" font-size="14" fill="#333" text-anchor="middle">+ optional strobe (12 V)</text>
+  <text x="1110" y="224" font-size="14" fill="#333" text-anchor="middle">300 WS2812B LEDs (no DFPlayer)</text>
+  <text x="1110" y="248" font-size="14" fill="#333" text-anchor="middle">sound: EXPLOSION box(es)</text>
   <text x="1110" y="284" font-size="14" font-weight="bold" fill="#1864ab" text-anchor="middle">plays the show on "BANG"</text>
 
   <!-- ===== messages ===== -->
@@ -121,5 +121,5 @@
   <text x="965" y="1106" font-size="13" fill="#555" text-anchor="middle">strobe only  -  any number  -  -DSTROBO</text>
   <text x="965" y="1134" font-size="14" fill="#333" text-anchor="middle">C3 SuperMini + MOSFET + LEDs on their own supply</text>
   <text x="965" y="1160" font-size="14" font-weight="bold" fill="#ad1457" text-anchor="middle">BANGER -> box:  STRB (the KABOOM animation starts)</text>
-  <text x="965" y="1182" font-size="12" fill="#555" text-anchor="middle">same burst as the BANGER's strobe; a new STRB within 5 s is ignored</text>
+  <text x="965" y="1182" font-size="12" fill="#555" text-anchor="middle">one flash at the KABOOM; a new STRB within 5 s is ignored</text>
 </svg>
