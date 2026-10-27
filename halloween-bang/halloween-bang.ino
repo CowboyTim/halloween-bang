@@ -49,7 +49,12 @@
 #endif
 
 #include "HardwareSerial.h"
+// The BANGER has no DFPlayer by default: the EXPLOSION boxes play the sounds, and the show never waits for
+// them. -DBANGER_DFPLAYER (bang.py build banger --flags=-DBANGER_DFPLAYER) puts a DFPlayer back on the BANGER.
+#if defined(EXPLOSION) || (defined(BANGER) && defined(BANGER_DFPLAYER))
+#define HAS_DFPLAYER 1
 #include "DFRobotDFPlayerMini.h"
+#endif
 
 #ifdef EXPLOSION
 #define SOUND_VOLUME        20  // EXPLOSION box, DFPlayer volume 0-30: same as the BANGER (was 10 while its DFPlayer ran from 3.3 V)
@@ -141,18 +146,16 @@ uint8_t WHAT = IS_STROBO;
 #define RING_START  120
 #define RING_END    299
 
-#define STROBE_ENABLED      1           // 1 = white strobe LED flashes during the KABOOM, 0 = off (timing: see ANIMATIONS block)
-#if defined(STROBO) && !STROBE_ENABLED
-#error "the STROBO box needs STROBE_ENABLED 1"
-#endif
-#define STROBE_PIN          GPIO_NUM_5  // on BANGER: gate of the logic-level N-MOSFET that switches the strobe LED (100-220R in series, 10k pull-down to GND)
+#define STROBE_PIN          GPIO_NUM_5  // STROBO box only: gate of the logic-level N-MOSFET that switches the flash (100-220R in series, 10k pull-down to GND)
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
 #define NUM_LEDS                   300  // can be shorter
 EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812GRB);
 
+#ifdef HAS_DFPLAYER
 HardwareSerial DFPLayerSerial(DFPLAYER_UART_NR);
 DFRobotDFPlayerMini myDFPlayer;
+#endif
 
 uint8_t animation_is_running = 0;
 uint8_t trigger_animation = 0;
@@ -390,8 +393,10 @@ void banger_led_update(){
   uint8_t r = 0, g = 0, b = 0;
   if(animation_is_running){
     if((((now / BLED_FLICKER_MS) * 2654435761u) >> 24) & 1){ r = 40; g = 8; }   // flicker (orange) while the show runs
+#ifdef BANGER_DFPLAYER
   } else if(!sound_ok){
     if((now / BLED_BLINK_MS) & 1){ r = 24; g = 16; }                            // blink (yellow): DFPlayer missing
+#endif
   } else {
     g = 10;                                                                     // dim green: ready
   }
@@ -805,7 +810,8 @@ void do_killswitch_loop(){
 }
 // ==== BUTTON / KILLSWITCH END ====
 
-// DFPlayer on the DFPLAYER_* pins, sets sound_ok. Shared by the BANGER and the EXPLOSION box.
+#ifdef HAS_DFPLAYER
+// DFPlayer on the DFPLAYER_* pins, sets sound_ok. Shared by the BANGER (with BANGER_DFPLAYER) and the EXPLOSION box.
 // UART to the DFPlayer (BANGER and EXPLOSION box)
 void dfplayer_uart_setup(){
   LOG("DFPlayer UART setup: 9600, %d, %d, %d", SERIAL_8N1, DFPLAYER_RX_PIN, DFPLAYER_TX_PIN);
@@ -844,6 +850,7 @@ uint8_t dfplayer_try_init(){
   return 1;
 }
 
+#if defined(BANGER) && defined(BANGER_DFPLAYER)
 // BANGER: a few tries at boot, then the show runs without sound
 void sound_setup(){
   doYIELD;
@@ -869,6 +876,8 @@ void sound_setup(){
     return;
   }
 }
+#endif
+#endif
 
 // ESP-NOW peer (unicast target, no encryption)
 static void add_peer(const uint8_t *mac){
@@ -882,12 +891,6 @@ static void add_peer(const uint8_t *mac){
 void banger_setup(){
   // first, so a BANG is never missed whatever happens with the DFPlayer below
   esp_now_register_recv_cb(OnDataRecv);
-
-#if STROBE_ENABLED
-  // strobe LED off from the start (the 10k pull-down keeps it off while the ESP32 boots)
-  pinMode(STROBE_PIN, OUTPUT);
-  digitalWrite(STROBE_PIN, LOW);
-#endif
 
   // Fancy led strip
   setup_led_strip();
@@ -907,9 +910,12 @@ void banger_setup(){
   LOG("STROBO boxes: %d, the KABOOM strobe is announced to them", STROBO_COUNT);
 #endif
 
+#ifdef BANGER_DFPLAYER
   sound_setup();
+#endif
 }
 
+#ifdef EXPLOSION
 uint32_t expl_next_try_ms = 0;      // EXPLOSION: when the next DFPlayer search starts
 uint32_t expl_play_ms     = 0;      // EXPLOSION: when the last sound was started (0 = none yet)
 
@@ -968,6 +974,7 @@ void do_explosion_loop(){
   }
   delay(2);
 }
+#endif   // EXPLOSION
 
 void setup() {
 #if LOG_USB_HWCDC
@@ -1003,9 +1010,11 @@ void setup() {
   if(WHAT == IS_KILLSWITCH){
      killswitch_setup();
   }
+#ifdef EXPLOSION
   if(WHAT == IS_EXPLOSION){
      explosion_setup();
   }
+#endif
   if(WHAT == IS_STROBO){
      strobo_setup();
   }
@@ -1028,7 +1037,7 @@ void do_banger_loop(){
   if(animation_is_playing()){
     if(millis() - last_activity > 100){
       last_activity = millis();
-      LOG("DFPlayer is playing (Busy)");
+      LOG("show is running");
     }
   } else {
     if(!printed_ready){
@@ -1050,9 +1059,11 @@ void loop() {
   if(WHAT == IS_KILLSWITCH){
       do_killswitch_loop();
   }
+#ifdef EXPLOSION
   if(WHAT == IS_EXPLOSION){
       do_explosion_loop();
   }
+#endif
   if(WHAT == IS_STROBO){
       do_strobo_loop();
   }
@@ -1065,11 +1076,13 @@ uint8_t animation_is_playing() {
 }
 
 uint8_t sound_is_playing(){
+#ifdef HAS_DFPLAYER
   if(!sound_ok)
     return 0;
   int busyState = digitalRead(DFPLAYER_BUSY_PIN);
   if(busyState == LOW)
     return 1;
+#endif
   return 0;
 }
 
@@ -1089,6 +1102,7 @@ void wait_sound_end(uint8_t n){
 }
 
 void play_sound(uint8_t n){
+#ifdef HAS_DFPLAYER
   if(!sound_ok){
     LOG("no DFPlayer, skipping File: %d", n);
     return;
@@ -1096,6 +1110,7 @@ void play_sound(uint8_t n){
   myDFPlayer.volume(SOUND_VOLUME); // Volume 0-30
   LOG("Playing File: %d", n);
   myDFPlayer.play(n);
+#endif
 }
 
 // tell the EXPLOSION box (if this build has one) that a sound starts now. Sent whether or not
@@ -1131,8 +1146,10 @@ void play_something() {
   wait_sound_end(SOUND_1);
 
   // sound effect (Kabooom)
+#ifdef HAS_DFPLAYER
   if(sound_ok)
     myDFPlayer.stop();
+#endif
   send_snd(SOUND_2);
   play_sound(SOUND_2);
 
@@ -1175,14 +1192,6 @@ void setup_led_strip(){
 #define KABOOM_FLASH_MS   180     // white flash (vampire disappears here!)
 #define KABOOM_FIRE_MS    600     // flash + fireball fade
 #define KABOOM_TOTAL_MS   3800    // whole KABOOM animation incl. embers + purple ghost wisp
-
-// Strobe burst during the KABOOM (STROBE_ENABLED / STROBE_PIN are defined with the pins at the top).
-// Runs over the slide-whistle "vanish" of 0002.mp3: the vampire steps out between the flashes.
-// Keep it a short burst: flashes at 8-10 Hz are in the photosensitive-epilepsy range -> put up a warning sign.
-#define STROBE_START_MS     150   // after the first white flash
-#define STROBE_DURATION_MS  1500  // length of the burst
-#define STROBE_PERIOD_MS    110   // ~9 flashes per second
-#define STROBE_ON_MS        40    // on-time per flash (short = crisp)
 
 // -------------------------------------------------------------------------
 //  Helpers
@@ -1331,28 +1340,24 @@ void run_ledstrip_animation_1() {
 //  Animation 2 (during SOUND_2): KABOOM flash + shockwave down the fuse,
 //  fading fireball, dying embers, purple ghost wisp drifting back along the fuse.
 // -------------------------------------------------------------------------
-void strobe_update(uint32_t ms) {
-#if STROBE_ENABLED
-  bool on = ms >= STROBE_START_MS && ms < STROBE_START_MS + STROBE_DURATION_MS
-         && ((ms - STROBE_START_MS) % STROBE_PERIOD_MS) < STROBE_ON_MS;
-  digitalWrite(STROBE_PIN, on ? HIGH : LOW);
-#endif
-}
 
 // ---- STROBO box ----------------------------------------------------------------------------
-// Runs the KABOOM strobe burst when the BANGER sends "STRB" (the moment its animation 2 starts),
-// with the same STROBE_* timing as the BANGER's own strobe, so both flash together.
-// Safety: the burst ends by itself, the pin is forced LOW afterwards, and a new STRB within
-// STRB_MIN_GAP_MS of the last burst is ignored, so repeats or a glitch cannot keep it strobing.
-#define STRB_MIN_GAP_MS  5000
-uint32_t strobo_t0      = 0;        // millis() when the running burst started (0 = idle)
-uint32_t strobo_last_ms = 0;        // when the last burst started (0 = none yet)
+// Fires ONE flash (like a flashbang, no strobing) when the BANGER sends "STRB" (the moment its
+// animation 2 starts). The flash is PWM on the MOSFET gate, so STROBO_BRIGHTNESS dims it.
+// Safety: the flash ends by itself after STROBO_FLASH_MS, the pin is forced LOW afterwards, and a
+// new STRB within STRB_MIN_GAP_MS of the last flash is ignored, so repeats or a glitch cannot re-fire it.
+#define STRB_MIN_GAP_MS     5000
+#define STROBO_FLASH_MS     150     // length of the one flash
+#define STROBO_BRIGHTNESS   255     // 0-255 PWM duty of the flash: 255 = full, lower = dimmer
+#define STROBO_PWM_HZ      5000     // PWM frequency (well above flicker); STROBO_BRIGHTNESS only scales the level
+uint32_t strobo_t0      = 0;        // millis() when the running flash started (0 = idle)
+uint32_t strobo_last_ms = 0;        // when the last flash started (0 = none yet)
 
 void strobo_setup(){
   esp_now_register_recv_cb(OnDataRecv);
-  // strobe off from the start (the pull-down keeps it off while the ESP32 boots)
-  pinMode(STROBE_PIN, OUTPUT);
-  digitalWrite(STROBE_PIN, LOW);
+  // flash off from the start: PWM duty 0 (the pull-down keeps the pin low while the ESP32 boots)
+  ledcAttach(STROBE_PIN, STROBO_PWM_HZ, 8);
+  ledcWrite(STROBE_PIN, 0);
 #ifdef EXPL_LED_PIN
   pinMode(EXPL_LED_PIN, OUTPUT);
   digitalWrite(EXPL_LED_PIN, EXPL_LED_ON);     // lit: ready
@@ -1366,17 +1371,13 @@ void do_strobo_loop(){
     strb_req = 0;
     if(!strobo_t0 && (!strobo_last_ms || now - strobo_last_ms >= STRB_MIN_GAP_MS)){
       strobo_t0 = strobo_last_ms = now ? now : 1;
-      LOG("STRB: strobe burst");
+      ledcWrite(STROBE_PIN, STROBO_BRIGHTNESS);
+      LOG("STRB: flash");
     }
   }
-  if(strobo_t0){
-    uint32_t ms = now - strobo_t0;
-    if(ms >= STROBE_START_MS + STROBE_DURATION_MS){
-      digitalWrite(STROBE_PIN, LOW);
-      strobo_t0 = 0;
-    } else {
-      strobe_update(ms);
-    }
+  if(strobo_t0 && now - strobo_t0 >= STROBO_FLASH_MS){
+    ledcWrite(STROBE_PIN, 0);
+    strobo_t0 = 0;
   }
 #ifdef EXPL_LED_PIN
   // LED: lit when ready, flickers during the burst
@@ -1394,7 +1395,6 @@ void run_ledstrip_animation_2() {
     doYIELD;
     uint32_t ms = millis() - t0;
     if (ms >= KABOOM_TOTAL_MS) break;
-    strobe_update(ms);
     strip.clear();
 
     if (ms < KABOOM_FIRE_MS) {
@@ -1439,7 +1439,6 @@ void run_ledstrip_animation_2() {
     delay(2);
   }
 
-  strobe_update(KABOOM_TOTAL_MS);   // outside the burst window -> strobe off
   strip.clear();
   strip.show();
   LOG("RUNNING Animation LED 2: DONE");
