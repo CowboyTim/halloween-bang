@@ -175,6 +175,9 @@ uint8_t stroboAddress[STROBO_COUNT][6] = { STROBO_MACS };
 #endif
 volatile uint8_t snd_req = 0;        // EXPLOSION: SOUND_1 or SOUND_2 announced by the BANGER
 volatile uint8_t strb_req = 0;       // STROBO: "STRB" received
+#ifdef TEST_SERIAL
+uint8_t test_hold = 0;              // KILLSWITCH test build: held by the "lock" command until "free"
+#endif
 
 #define WATCHDOG_TIMEOUT_MS 60000   // 60s
 esp_task_wdt_user_handle_t wdt_user_handle;
@@ -760,6 +763,9 @@ void do_killswitch_loop(){
   // debounce: the level must stay the same for 30 ms.
   // The external button and the BOOT button do the same (LOW = held).
   uint8_t raw = (digitalRead(KILL_BUTTON_PIN) == LOW || digitalRead(KILL_BOOT_PIN) == LOW) ? LOW : HIGH;
+#ifdef TEST_SERIAL
+  if(test_hold) raw = LOW;         // "lock" command (test build)
+#endif
   if (raw != ks_raw_last) {
     ks_raw_last  = raw;
     ks_raw_since = now;
@@ -820,17 +826,37 @@ void dfplayer_uart_setup(){
   pinMode(DFPLAYER_BUSY_PIN, INPUT_PULLUP);
 }
 
+// Is a DFPlayer there? A raw "query status" (0x42) goes out and its answer (7E FF 06 42 ...) is looked for,
+// with no library call in between. The library's ACK wait spins forever when noise on the RX line keeps
+// "available" true and no DFPlayer ever clears _isSending (seen on an EXPLOSION box with no DFPlayer:
+// the box hung in the search and the watchdog rebooted it), so the library never waits for an ACK here.
+uint8_t dfplayer_answers(){
+  static const uint8_t query[10] = {0x7E, 0xFF, 0x06, 0x42, 0x00, 0x00, 0x00, 0xFE, 0xB9, 0xEF};
+  while(DFPLayerSerial.available())
+    DFPLayerSerial.read();
+  DFPLayerSerial.write(query, sizeof(query));
+  uint8_t win[4] = {0, 0, 0, 0};           // the last 4 bytes received
+  uint32_t t0 = millis();
+  while(millis() - t0 < DFPLAYER_BUSY_TIMEOUT_MS){
+    doYIELD;
+    while(DFPLayerSerial.available()){
+      memmove(win, win + 1, 3);
+      win[3] = DFPLayerSerial.read();
+      if(win[0] == 0x7E && win[1] == 0xFF && win[2] == 0x06 && win[3] == 0x42)
+        return 1;
+    }
+    delay(1);
+  }
+  return 0;
+}
+
 // One try: the DFPlayer answers, BUSY works, settings applied. Blocks for about DFPLAYER_BUSY_TIMEOUT_MS at most
 uint8_t dfplayer_try_init(){
-  // Library hazard (DFRobotDFPlayerMini): in ACK mode sendStack() loops "while (_isSending) waitAvailable()".
-  // After any timeout the library's _isAvailable flag stays set until readType()/read() is called, so
-  // waitAvailable() then returns at once and a missing ACK keeps _isSending true: that loop never ends.
-  // This froze the box at a cold power-up (the DFPlayer is not answering yet). So: clear the flag here,
-  // use ACK mode only for the detecting begin(), and send everything after it without ACK (nothing can block).
-  myDFPlayer.readType();
-  if(!myDFPlayer.begin(DFPLayerSerial, true, true))
+  if(!dfplayer_answers())
     return 0;
-  myDFPlayer.begin(DFPLayerSerial, false, false);   // public way to leave ACK mode (disableACK() is private): no reset, no waiting
+  // ACK mode stays off from here on (public way: begin() with isACK false, no reset, no waiting): every
+  // command is sent without waiting for an answer, so nothing can block
+  myDFPlayer.begin(DFPLayerSerial, false, false);
   LOG("DFPlayer Mini ready! Will check BUSY pin number: %u", DFPLAYER_BUSY_PIN);
   uint32_t t0 = millis();
   while(digitalRead(DFPLAYER_BUSY_PIN) == LOW){
@@ -966,10 +992,13 @@ void do_explosion_loop(){
   if(snd_req){
     uint8_t n = snd_req;
     snd_req = 0;
+    LOG("SND%d received ms=%lu", (int)n, (unsigned long)now);
     if(!snd_last_ms[n] || now - snd_last_ms[n] >= SND_DEDUPE_MS){
       snd_last_ms[n] = now ? now : 1;
       expl_play_ms   = snd_last_ms[n];
       play_sound(n);
+    } else {
+      LOG("SND%d ignored (repeat)", (int)n);
     }
   }
   delay(2);
@@ -1047,8 +1076,75 @@ void do_banger_loop(){
   }
 }
 
+// ==== TEST SERIAL BEGIN ====
+// Test build only (-DTEST_SERIAL, with --log): one command per line on the USB serial, for the bench
+// test (tools/bench/run_tests.py). status | fire | lock | free. Never in a production build.
+#ifdef TEST_SERIAL
+static const char *test_role_name(){
+#if defined(BANGER)
+  return "BANGER";
+#elif defined(BUTTON)
+  return "BUTTON";
+#elif defined(KILLSWITCH)
+  return "KILLSWITCH";
+#elif defined(EXPLOSION)
+  return "EXPLOSION";
+#else
+  return "STROBO";
+#endif
+}
+
+static void test_command(const char *cmd){
+  if(!strcmp(cmd, "status")){
+    LOG("TEST status role=%s ms=%lu", test_role_name(), (unsigned long)millis());
+  } else if(!strcmp(cmd, "fire")){
+    LOG("TEST fire ms=%lu", (unsigned long)millis());
+#ifdef BUTTON
+    portENTER_CRITICAL(&r_mux);      // the same queued press as the real button
+    button_was_pressed = 1;
+    portEXIT_CRITICAL(&r_mux);
+#endif
+#ifdef BANGER
+    trigger_animation = 1;           // the same as a received "BANG"
+#endif
+  } else if(!strcmp(cmd, "lock")){
+#ifdef KILLSWITCH
+    test_hold = 1;
+    LOG("TEST lock ms=%lu", (unsigned long)millis());
+#endif
+  } else if(!strcmp(cmd, "free")){
+#ifdef KILLSWITCH
+    test_hold = 0;
+    LOG("TEST free ms=%lu", (unsigned long)millis());
+#endif
+  } else {
+    LOG("TEST unknown command: %s", cmd);
+  }
+}
+
+static void test_poll(){
+  static char line[24];
+  static uint8_t n = 0;
+  while(Serial.available()){
+    char c = Serial.read();
+    if(c == '\r') continue;
+    if(c != '\n'){
+      if(n < sizeof(line) - 1) line[n++] = c;
+      continue;
+    }
+    line[n] = 0;
+    n = 0;
+    test_command(line);
+  }
+}
+#endif
+// ==== TEST SERIAL END ====
+
 void loop() {
   wdt_feed();
+#ifdef TEST_SERIAL
+  test_poll();
+#endif
   doYIELD;
   if(WHAT == IS_BANGER){
       do_banger_loop();
@@ -1119,8 +1215,11 @@ void play_sound(uint8_t n){
 void send_snd(uint8_t n){
 #ifdef EXPLOSION_MACS
   const char *m = (n == SOUND_1) ? "SND1" : "SND2";
-  for(uint8_t i = 0; i < EXPLOSION_COUNT; i++)
-    esp_now_send(explosionAddress[i], (const uint8_t *)m, 4);
+  for(uint8_t i = 0; i < EXPLOSION_COUNT; i++){
+    esp_err_t err = esp_now_send(explosionAddress[i], (const uint8_t *)m, 4);
+    if(err != ESP_OK) LOG("%s to box %d: %s", m, i, esp_err_to_name(err));
+  }
+  LOG("%s sent to %d box(es) ms=%lu", m, EXPLOSION_COUNT, (unsigned long)millis());
 #endif
 }
 
@@ -1128,14 +1227,19 @@ void send_snd(uint8_t n){
 // best-effort rules as send_snd()
 void send_strb(){
 #ifdef STROBO_MACS
-  for(uint8_t i = 0; i < STROBO_COUNT; i++)
-    esp_now_send(stroboAddress[i], (const uint8_t *)"STRB", 4);
+  for(uint8_t i = 0; i < STROBO_COUNT; i++){
+    esp_err_t err = esp_now_send(stroboAddress[i], (const uint8_t *)"STRB", 4);
+    if(err != ESP_OK) LOG("STRB to box %d: %s", i, esp_err_to_name(err));
+  }
+  LOG("STRB sent to %d box(es) ms=%lu", STROBO_COUNT, (unsigned long)millis());
 #endif
 }
 
 void play_something() {
   animation_is_running = 1;
   last_activity = millis();
+  uint32_t show_t0 = last_activity;
+  LOG("SHOW start ms=%lu", (unsigned long)show_t0);
 
   // sound effect 1 (Whooosh)
   send_snd(SOUND_1);
@@ -1159,6 +1263,7 @@ void play_something() {
   wait_sound_end(SOUND_2);
 
   // done
+  LOG("SHOW done ms=%lu duration=%lu", (unsigned long)millis(), (unsigned long)(millis() - show_t0));
   LOG("done showing demolition animation");
   animation_is_running = 0;
   trigger_animation = 0;
@@ -1316,9 +1421,11 @@ void run_ledstrip_animation_1() {
   float ringStart = fuse_cross_ms();
   uint32_t buildDone = (uint32_t)(ringStart + RING_IGNITE_MS + BUILDUP_MIN_MS);
   uint32_t t0 = millis();
+  uint32_t frames = 0;
 
   for (;;) {
     doYIELD;
+    frames++;
     uint32_t ms = millis() - t0;
     strip.clear();
     draw_fuse(ms);
@@ -1333,7 +1440,7 @@ void run_ledstrip_animation_1() {
     }
     delay(2);
   }
-  LOG("RUNNING Animation LED 1: DONE");
+  LOG("RUNNING Animation LED 1: DONE frames=%lu", (unsigned long)frames);
 }
 
 // -------------------------------------------------------------------------
@@ -1369,15 +1476,19 @@ void do_strobo_loop(){
   uint32_t now = millis();
   if(strb_req){
     strb_req = 0;
+    LOG("STRB received ms=%lu", (unsigned long)now);
     if(!strobo_t0 && (!strobo_last_ms || now - strobo_last_ms >= STRB_MIN_GAP_MS)){
       strobo_t0 = strobo_last_ms = now ? now : 1;
       ledcWrite(STROBE_PIN, STROBO_BRIGHTNESS);
-      LOG("STRB: flash");
+      LOG("STRB: flash on ms=%lu", (unsigned long)now);
+    } else {
+      LOG("STRB ignored (flash running or within %d s)", STRB_MIN_GAP_MS / 1000);
     }
   }
   if(strobo_t0 && now - strobo_t0 >= STROBO_FLASH_MS){
     ledcWrite(STROBE_PIN, 0);
     strobo_t0 = 0;
+    LOG("STRB: flash off ms=%lu", (unsigned long)now);
   }
 #ifdef EXPL_LED_PIN
   // LED: lit when ready, flickers during the burst
@@ -1390,9 +1501,11 @@ void do_strobo_loop(){
 void run_ledstrip_animation_2() {
   LOG("RUNNING Animation LED 2: KABOOM");
   uint32_t t0 = millis();
+  uint32_t frames = 0;
 
   for (;;) {
     doYIELD;
+    frames++;
     uint32_t ms = millis() - t0;
     if (ms >= KABOOM_TOTAL_MS) break;
     strip.clear();
@@ -1441,7 +1554,7 @@ void run_ledstrip_animation_2() {
 
   strip.clear();
   strip.show();
-  LOG("RUNNING Animation LED 2: DONE");
+  LOG("RUNNING Animation LED 2: DONE frames=%lu", (unsigned long)frames);
 }
 // ==== ANIMATIONS END ====
 

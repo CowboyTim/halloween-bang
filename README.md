@@ -237,6 +237,18 @@ A 16 GB card is much bigger than needed: the two files together are about 360 KB
 
 To test a card: boot the board with logging on (`python3 bang.py monitor banger`). The log should show `DFPlayer Mini ready` and `DFPlayer BUSY HIGH, continue`. A show should then print `Playing File: 1` and `Playing File: 2`.
 
+## Bench test
+
+`tools/bench/run_tests.py` drives the boards over USB serial and checks their logs. It needs the test build on each board in the test:
+
+```
+python3 bang.py deploy banger explosion button_spare strobo --log --flags=-DTEST_SERIAL
+python3 tools/bench/run_tests.py                  # all tests (lock tests need the KILLSWITCH connected)
+python3 tools/bench/run_tests.py repeat --shows 20
+```
+
+Tests and what they check are in `docs/test_plan.md`. Logs of each run go to `tools/bench/out/<time>/`. Production builds do not read the USB serial: flash them after the tests (`python3 bang.py deploy <boards>`, no `--log`, no `--flags=-DTEST_SERIAL`).
+
 ## Development Notes
 
 ### Board GPIO Pinouts

@@ -5,3 +5,5 @@
 /dist/
 /halloween-bang/build/
 /.build/
+__pycache__/
+tools/bench/out/
