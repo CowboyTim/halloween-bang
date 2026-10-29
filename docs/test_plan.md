@@ -37,7 +37,7 @@ wait and the cooldown from the `status` replies and adapts. Never use a shortene
 | `lock_storm` | 20 quick `lock` / `free` cycles | no lock expires; the BUTTON fires afterwards (not stuck locked) |
 | `lock_press_race` | `lock` and `fire` within 50 ms, 5 rounds | the BUTTON is unlocked after each release and fires afterwards |
 | `lock_during_show` | `fire` to the BUTTON, `lock` 2 s later, `free` after the show | the show runs to its end while locked (a lock does not stop a show); the BUTTON goes to LOCKED when the show is over (still held); unlocks on `free` |
-| `lock_expiry` | `lock` to the KILLSWITCH and hold it | the KILLSWITCH and the BUTTON both expire the lock after `LOCK_MAX_MS` (15 s), 13-18 s from the lock |
+| `lock_expiry` | `lock` to the KILLSWITCH and hold it | the KILLSWITCH and the BUTTON both expire the lock after `LOCK_MAX_MS` (30 s), 28-33 s from the lock |
 
 The timings checked in a run come from the logs (`SHOW done ... duration=`, `SND1 sent`, `STRB sent`,
 `frames=`). The host arrival times of two boards' lines differ by the USB latency: a 0.5 s window is

@@ -485,7 +485,7 @@ void IRAM_ATTR button_pressed() {
 #define LOCK_TIMEOUT_MS        1000    // BUTTON: LOCKED until no "LOCK" arrived for this long
 #define KILL_LOCK_PERIOD_MS    150     // KILLSWITCH: "LOCK" is repeated this often while held (several may get lost)
 #ifndef LOCK_MAX_MS
-#define LOCK_MAX_MS            15000   // a lock ends by itself after this long, even if the killswitch stays held
+#define LOCK_MAX_MS            30000   // a lock ends by itself after this long, even if the killswitch stays held
 
 // Wired killswitch on the BUTTON: a normally-open switch to GND on a long cable (up to about 10 m), held = locked,
 // OR'ed with the radio killswitch. A long wire picks up noise and a false lock blocks the button, so the line must

@@ -303,7 +303,7 @@ def test_lock_during_show(boards, c):
     c.check(hit and SHOW_MIN_MS <= int(hit[1].group(1)) <= SHOW_MAX_MS,
             "the show ran to the end while locked")
     ks.send("free")
-    # a lock lasts 15 s at most: hold it again over the end of the BUTTON's show + cooldown
+    # a lock lasts 30 s at most: hold it again over the end of the BUTTON's show + cooldown
     time.sleep(max(0, t0 + TIMING["wait"] + TIMING["cooldown"] - 5 - time.monotonic()))
     ks.send("lock")
     hit = button.wait(r"BUTTON state 3 -> 0", t0, button_cycle() + 10)
@@ -313,16 +313,16 @@ def test_lock_during_show(boards, c):
 
 
 def test_lock_expiry(boards, c):
-    c.begin("lock_expiry: a switch left on expires after LOCK_MAX_MS (15 s), on both sides")
+    c.begin("lock_expiry: a switch left on expires after LOCK_MAX_MS (30 s), on both sides")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
     t = time.monotonic()
     ks.send("lock")
     hit = ks.wait(r"lock expired", t, 25)
-    c.check(hit and 13 <= hit[0] - t <= 18, f"KILLSWITCH expires the lock at {(hit[0]-t) if hit else float('nan'):.1f} s")
+    c.check(hit and 28 <= hit[0] - t <= 33, f"KILLSWITCH expires the lock at {(hit[0]-t) if hit else float('nan'):.1f} s")
     # the KILLSWITCH's FREE at the expiry may reach the BUTTON before its own timer: either ends the lock
     hit = button.wait(r"lock expired|killswitch released", t, 25)
-    c.check(hit and 13 <= hit[0] - t <= 18, "BUTTON is unlocked at the same time (its own expiry or the FREE)")
+    c.check(hit and 28 <= hit[0] - t <= 33, "BUTTON is unlocked at the same time (its own expiry or the FREE)")
     ks.send("free")
     c.check(ks.wait(r"KILLSWITCH released", t, 3), "KILLSWITCH released")
 
