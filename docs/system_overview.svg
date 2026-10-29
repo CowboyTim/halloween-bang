@@ -35,7 +35,7 @@
   <text x="1110" y="136" font-size="22" font-weight="bold" fill="#1864ab" text-anchor="middle">BANGER</text>
   <text x="1110" y="158" font-size="13" fill="#555" text-anchor="middle">the ring  -  build flag -DBANGER</text>
   <text x="1110" y="200" font-size="14" fill="#333" text-anchor="middle">ESP32-S3 Zero</text>
-  <text x="1110" y="224" font-size="14" fill="#333" text-anchor="middle">300 WS2812B LEDs (no DFPlayer)</text>
+  <text x="1110" y="224" font-size="14" fill="#333" text-anchor="middle">600 WS2812B LEDs (no DFPlayer)</text>
   <text x="1110" y="248" font-size="14" fill="#333" text-anchor="middle">sound: EXPLOSION box(es)</text>
   <text x="1110" y="284" font-size="14" font-weight="bold" fill="#1864ab" text-anchor="middle">plays the show on "BANG"</text>
 
@@ -92,7 +92,7 @@
 
   <!-- SHOW -> READY -->
   <polyline points="1100,642 1100,690 760,690 760,642" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arr)"/>
-  <text x="930" y="712" font-size="12" font-weight="bold" fill="#2b8a3e" text-anchor="middle">after the show: 16 s (WAIT_TIME_BUTTON)</text>
+  <text x="930" y="712" font-size="12" font-weight="bold" fill="#2b8a3e" text-anchor="middle">after the show + cooldown: 16 s + 60 s (lamp dark)</text>
 
   <!-- SHOW -> LOCKED (still held) -->
   <polyline points="1180,642 1180,780 220,780 220,642" fill="none" stroke="#c62828" stroke-width="3" marker-end="url(#arrr)"/>

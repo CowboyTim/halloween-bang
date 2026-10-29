@@ -116,6 +116,13 @@
 #endif
 
 #define WAIT_TIME_BUTTON    16000       // configurable wait time (ms) for button mode - time of animation the banger is showing (whole show is ~14.5s: 0001.mp3 10.3s + 0002.mp3 4.0s)
+// After every show both sides rest for SHOW_COOLDOWN_MS, then start fresh: the BANGER drops every BANG that
+// arrives in that time, the BUTTON ignores the button (lamp dark) until WAIT_TIME_BUTTON + SHOW_COOLDOWN_MS.
+// So whatever goes wrong at the button (a stuck contact, a loose wire), shows cannot follow each other
+// back to back. The BUTTON's total wait must stay longer than the BANGER's show + cooldown.
+#ifndef SHOW_COOLDOWN_MS
+#define SHOW_COOLDOWN_MS    60000
+#endif
 
 #define IS_BUTTON     1
 #define IS_BANGER     2
@@ -141,15 +148,16 @@ uint8_t WHAT = IS_EXPLOSION;
 uint8_t WHAT = IS_STROBO;
 #endif
 
+// Two 5 m strips in one chain (600 LEDs): the fuse is LEDs 0-419 (7 m), the ring stays the last 180 LEDs.
 #define LINE_START    0
-#define LINE_END    119
-#define RING_START  120
-#define RING_END    299
+#define LINE_END    419
+#define RING_START  420
+#define RING_END    599
 
 #define STROBE_PIN          GPIO_NUM_5  // STROBO box only: gate of the logic-level N-MOSFET that switches the flash (100-220R in series, 10k pull-down to GND)
 
 #define LED_STRIP_GPIO_PIN  GPIO_NUM_4  // data pin to DIN on the strip
-#define NUM_LEDS                   300  // can be shorter
+#define NUM_LEDS                   600  // two 5 m strips (60 LED/m) in one chain; can be shorter
 EdSoftLED strip(NUM_LEDS, LED_STRIP_GPIO_PIN, WS2812GRB);
 
 #ifdef HAS_DFPLAYER
@@ -177,6 +185,8 @@ volatile uint8_t snd_req = 0;        // EXPLOSION: SOUND_1 or SOUND_2 announced 
 volatile uint8_t strb_req = 0;       // STROBO: "STRB" received
 #ifdef TEST_SERIAL
 uint8_t test_hold = 0;              // KILLSWITCH test build: held by the "lock" command until "free"
+uint8_t  test_pin_mode = 0;         // BUTTON test build: 0 = the real pin, 1 = held LOW ("hold"), 2 = chatter ("chatter")
+uint32_t test_press_until = 0;      // BUTTON test build: "fire" reads the pin LOW until then (a clean 100 ms press)
 #endif
 
 #define WATCHDOG_TIMEOUT_MS 60000   // 60s
@@ -347,8 +357,15 @@ static void apply_lock_msg(const uint8_t *msg, int len, uint8_t link) {
   }
 }
 
+volatile uint32_t bang_rx = 0;      // BANGER: BANG messages received (copies included), for the log
+uint8_t bang_src[6] = {0};           // BANGER: MAC of the last BANG sender (which BUTTON started the show)
+uint32_t show_end_ms = 0;            // BANGER: when the last show ended (0 = none yet)
+bool banger_cooling(){ return show_end_ms && millis() - show_end_ms < SHOW_COOLDOWN_MS; }
+
 void OnDataRecv(const esp_now_recv_info_t *mac, const uint8_t *msg, int len) {
   if(msg_is(msg, len, "BANG")) {
+    bang_rx++;
+    if(mac && mac->src_addr) memcpy(bang_src, mac->src_addr, 6);
     trigger_animation = 1;
   } else if(msg_is(msg, len, "LOCK") || msg_is(msg, len, "FREE")) {
     apply_lock_msg(msg, len, LINK_ESPNOW);
@@ -400,6 +417,8 @@ void banger_led_update(){
   } else if(!sound_ok){
     if((now / BLED_BLINK_MS) & 1){ r = 24; g = 16; }                            // blink (yellow): DFPlayer missing
 #endif
+  } else if(banger_cooling()){
+    b = 12;                                                                     // dim blue: cooldown, BANGs are dropped
   } else {
     g = 10;                                                                     // dim green: ready
   }
@@ -506,6 +525,7 @@ uint8_t lamp_level(uint8_t state, uint32_t ms) {
       return (uint8_t)(LAMP_BREATH_MIN + (255 - LAMP_BREATH_MIN) * b * b);
     }
     case BS_SHOW:
+      if (ms >= WAIT_TIME_BUTTON) return 0;   // the show is over: dark for the cooldown
       return ((ms % LAMP_SHOW_PERIOD_MS) < LAMP_SHOW_PERIOD_MS / 2) ? 255 : 0;
   }
   return 0;
@@ -515,6 +535,28 @@ uint8_t lamp_level(uint8_t state, uint32_t ms) {
 uint8_t  bstate            = BS_READY;   // works out of the box
 uint32_t bstate_since      = 0;
 uint32_t button_high_since = 0;     // millis() since the button was last seen released (0 = pressed now)
+uint32_t button_low_since  = 0;     // millis() since the button was last seen pressed (0 = released now)
+uint8_t  button_armed      = 0;     // 1 = released long enough: the next LOW of PRESS_MIN_MS is a press
+uint32_t button_glitches   = 0;     // falling edges (interrupt) that did not become a press: noise, chatter
+uint32_t button_glitch_log_ms = 0;
+// A press counts only when the pin is LOW for PRESS_MIN_MS after it was HIGH (released) for RELEASE_MIN_MS.
+// A noise spike (the lamp PWM, a loose wire) or a stuck / chattering contact then cannot start shows on
+// its own, and a button that is still held after a show must be let go before it can start the next one.
+#define PRESS_MIN_MS        30
+#define RELEASE_MIN_MS      50
+#define BUTTON_STUCK_MS     2000    // held this long after its press = stuck: the lamp flickers
+uint8_t button_stuck_shown = 0;
+
+uint8_t button_level(){
+#ifdef TEST_SERIAL
+  uint32_t t = millis();
+  if (test_press_until && (int32_t)(test_press_until - t) > 0) return LOW;
+  test_press_until = 0;
+  if (test_pin_mode == 1) return LOW;
+  if (test_pin_mode == 2) return ((t / 5) & 1) ? LOW : HIGH;
+#endif
+  return digitalRead(BUTTON_PIN);
+}
 uint32_t last_lamp_ms      = 0;
 uint8_t  bang_repeats_left = 0;     // BANG copies still to send
 uint32_t bang_next_ms      = 0;
@@ -613,12 +655,34 @@ void do_button_loop(){
   uint32_t now = millis();
   rf433_poll();
 
-  // Inputs. A queued press is consumed on every pass, so nothing piles up while it is not
-  // its turn (a press during LOCKED / SHOW is simply gone).
-  uint8_t pressed;
+  // Inputs. A press is detected on every pass and used only while READY, so nothing piles up while
+  // it is not its turn (a press during LOCKED / SHOW is simply gone).
+  uint8_t level = button_level();
+  if (level == HIGH) {
+    if (!button_high_since) button_high_since = now ? now : 1;
+    button_low_since = 0;
+    if (!button_armed && now - button_high_since >= RELEASE_MIN_MS) button_armed = 1;
+  } else {
+    button_high_since = 0;
+    if (!button_low_since) button_low_since = now ? now : 1;
+  }
+  bool pressed = false;
+  if (button_armed && button_low_since && now - button_low_since >= PRESS_MIN_MS) {
+    pressed = true;
+    button_armed = 0;                // one press per push: it must be released before the next one
+    LOG("button press (state %d)", bstate);
+  }
+  // the interrupt only counts edges now, for the log: an edge that is not a press is noise or chatter
+  uint8_t edge;
   portENTER_CRITICAL(&r_mux);
-  pressed = button_was_pressed;  button_was_pressed = 0;
+  edge = button_was_pressed;  button_was_pressed = 0;
   portEXIT_CRITICAL(&r_mux);
+  if (edge && !pressed && level == HIGH) button_glitches++;
+  if (button_glitches && now - button_glitch_log_ms >= 10000) {
+    LOG("button: %lu short glitch(es) ignored in the last 10 s (noise or a chattering contact)", (unsigned long)button_glitches);
+    button_glitches = 0;
+    button_glitch_log_ms = now;
+  }
   // signed: the callback may have stored a millis() a little newer than "now"
   uint32_t lock_ms = lock_seen_ms;
   bool held = lock_ms && (int32_t)(now - lock_ms) < LOCK_TIMEOUT_MS;
@@ -635,21 +699,13 @@ void do_button_loop(){
   if (lock_expired) held = false;
   if (wired_kill_held(now, digitalRead(WIRED_KILL_PIN))) held = true;   // OR with the wired killswitch
 
-  // button released for at least 50 ms (a button that is held down must be let go first)
-  if (digitalRead(BUTTON_PIN) == HIGH) {
-    if (!button_high_since) button_high_since = now ? now : 1;
-  } else {
-    button_high_since = 0;
-  }
-  bool released = button_high_since && (now - button_high_since >= 50);
+  // button released for at least RELEASE_MIN_MS (a button that is held down must be let go first)
+  bool released = button_high_since && (now - button_high_since >= RELEASE_MIN_MS);
 
   switch (bstate) {
     case BS_LOCKED:
       if (!held && released) {
-        // a press has to start while READY, so a press that is still going on does not count
-        portENTER_CRITICAL(&r_mux);
-        button_was_pressed = 0;
-        portEXIT_CRITICAL(&r_mux);
+        // a press has to start while READY: "released" means the button is up, so none is going on
         LOG("killswitch released, button works again (lock came via:%s%s%s)",
             (lock_links & LINK_ESPNOW) ? " ESP-NOW" : "", (lock_links & LINK_433) ? " 433 MHz" : "",
             (lock_links & LINK_WIRED) ? " wired" : "");
@@ -669,8 +725,9 @@ void do_button_loop(){
       }
       break;
     case BS_SHOW:
-      // the show runs on the BANGER; this is just a timer
-      if (now - bstate_since >= WAIT_TIME_BUTTON) {
+      // the show runs on the BANGER; this is just a timer: the show, then the cooldown
+      if (now - bstate_since >= WAIT_TIME_BUTTON + SHOW_COOLDOWN_MS) {
+        LOG("cooldown over (%d s): fresh start", SHOW_COOLDOWN_MS / 1000);
         button_set_state(held ? BS_LOCKED : BS_READY);
       }
       break;
@@ -691,7 +748,23 @@ void do_button_loop(){
   }
   if (now - last_lamp_ms >= 10) {
     last_lamp_ms = now;
-    ledcWrite(LED_12V_PIN, lamp_level(bstate, now - bstate_since));
+    // the button still held long after its press (a stuck contact): flicker, so it can be seen; it is
+    // not a press, it has to be let go before the next one counts
+    bool stuck = !button_armed && button_low_since && now - button_low_since >= BUTTON_STUCK_MS;
+    if (stuck != button_stuck_shown) {
+      button_stuck_shown = stuck;
+      if (stuck) {
+        LOG("button held for %d s after its press: stuck? (it must be let go before the next press)", BUTTON_STUCK_MS / 1000);
+      } else {
+        LOG("button let go");
+      }
+    }
+    uint32_t ms = now - bstate_since;
+    bool show_running = bstate == BS_SHOW && ms < WAIT_TIME_BUTTON;
+    if (stuck && !show_running)
+      ledcWrite(LED_12V_PIN, lamp_level(BS_SHOW, ms % WAIT_TIME_BUTTON));   // the show's flicker
+    else
+      ledcWrite(LED_12V_PIN, lamp_level(bstate, ms));
   }
   delay(2);
 }
@@ -1049,16 +1122,31 @@ void setup() {
   }
 }
 
+uint8_t  cooling_logged = 0;        // BANGER: a cooldown is running (logged when it ends)
+
 void do_banger_loop(){
   // BANGER just logs some info, the OnDataRecv handles the real thing
+  // cooldown after a show: every BANG is dropped, then a fresh start
+  bool cooling = banger_cooling();
+  if(cooling_logged && !cooling){
+    cooling_logged = 0;
+    trigger_animation = 0;
+    LOG("cooldown over: ready for a new show");
+  }
   if(trigger_animation == 1){
     trigger_animation = 0;
-    LOG("received DEMOLITION request!");
-    if(!animation_is_playing()){
+    LOG("received DEMOLITION request! from %02x:%02x:%02x:%02x:%02x:%02x (BANG #%lu)",
+        bang_src[0], bang_src[1], bang_src[2], bang_src[3], bang_src[4], bang_src[5], (unsigned long)bang_rx);
+    if(cooling){
+      LOG("BANG ignored: cooldown, %lu s left", (unsigned long)((SHOW_COOLDOWN_MS - (millis() - show_end_ms)) / 1000));
+    } else if(!animation_is_playing()){
       printed_ready = 0;
       play_something();
       // copies of the same BANG (and any early press) that arrived during the show are dropped
       trigger_animation = 0;
+      show_end_ms = millis() ? millis() : 1;
+      cooling_logged = 1;
+      LOG("cooldown: %d s, BANGs are dropped until then", SHOW_COOLDOWN_MS / 1000);
     } else {
       LOG("animation already running");
     }
@@ -1078,7 +1166,8 @@ void do_banger_loop(){
 
 // ==== TEST SERIAL BEGIN ====
 // Test build only (-DTEST_SERIAL, with --log): one command per line on the USB serial, for the bench
-// test (tools/bench/run_tests.py). status | fire | lock | free. Never in a production build.
+// test (tools/bench/run_tests.py). status | fire | lock | free, BUTTON also hold | chatter | release | glitch.
+// Never in a production build.
 #ifdef TEST_SERIAL
 static const char *test_role_name(){
 #if defined(BANGER)
@@ -1112,17 +1201,32 @@ static const char *test_reset_name(){
 
 static void test_command(const char *cmd){
   if(!strcmp(cmd, "status")){
-    LOG("TEST status role=%s reset=%s heap=%lu ms=%lu", test_role_name(), test_reset_name(),
-        (unsigned long)ESP.getFreeHeap(), (unsigned long)millis());
+    LOG("TEST status role=%s reset=%s heap=%lu wait=%d cooldown=%d ms=%lu", test_role_name(), test_reset_name(),
+        (unsigned long)ESP.getFreeHeap(), WAIT_TIME_BUTTON, SHOW_COOLDOWN_MS, (unsigned long)millis());
   } else if(!strcmp(cmd, "fire")){
     LOG("TEST fire ms=%lu", (unsigned long)millis());
 #ifdef BUTTON
-    portENTER_CRITICAL(&r_mux);      // the same queued press as the real button
-    button_was_pressed = 1;
-    portEXIT_CRITICAL(&r_mux);
+    test_press_until = millis() + 100;   // a clean 100 ms press, through the same filter as the real button
+    if (!test_press_until) test_press_until = 1;
 #endif
 #ifdef BANGER
     trigger_animation = 1;           // the same as a received "BANG"
+#endif
+#ifdef BUTTON
+  } else if(!strcmp(cmd, "hold")){       // the button stuck down
+    test_pin_mode = 1;
+    LOG("TEST hold ms=%lu", (unsigned long)millis());
+  } else if(!strcmp(cmd, "chatter")){    // a chattering contact: 5 ms LOW / 5 ms HIGH
+    test_pin_mode = 2;
+    LOG("TEST chatter ms=%lu", (unsigned long)millis());
+  } else if(!strcmp(cmd, "release")){    // back to the real pin
+    test_pin_mode = 0;
+    LOG("TEST release ms=%lu", (unsigned long)millis());
+  } else if(!strcmp(cmd, "glitch")){     // an interrupt edge with the pin HIGH again: noise
+    portENTER_CRITICAL(&r_mux);
+    button_was_pressed = 1;
+    portEXIT_CRITICAL(&r_mux);
+    LOG("TEST glitch ms=%lu", (unsigned long)millis());
 #endif
   } else if(!strcmp(cmd, "lock")){
 #ifdef KILLSWITCH
@@ -1280,8 +1384,8 @@ void play_something() {
   wait_sound_end(SOUND_2);
 
   // done
-  LOG("SHOW done ms=%lu duration=%lu heap=%lu", (unsigned long)millis(), (unsigned long)(millis() - show_t0),
-      (unsigned long)ESP.getFreeHeap());
+  LOG("SHOW done ms=%lu duration=%lu heap=%lu bang_rx=%lu", (unsigned long)millis(), (unsigned long)(millis() - show_t0),
+      (unsigned long)ESP.getFreeHeap(), (unsigned long)bang_rx);
   LOG("done showing demolition animation");
   animation_is_running = 0;
   trigger_animation = 0;
@@ -1299,9 +1403,12 @@ void setup_led_strip(){
 // -------------------------------------------------------------------------
 //  TUNING - change these to taste
 // -------------------------------------------------------------------------
-#define FUSE_LEN          (LINE_END - LINE_START + 1)   // 152 LEDs
-#define RING_LEN          (RING_END - RING_START + 1)   // 148 LEDs
-#define FUSE_TAIL         14      // length of the glowing trail behind the spark (LEDs)
+#define FUSE_LEN          (LINE_END - LINE_START + 1)   // 420 LEDs
+#define RING_LEN          (RING_END - RING_START + 1)   // 180 LEDs
+// The animation was designed on a 120-LED fuse. The times stay the same (the sound does not change), so on a
+// longer fuse the spark, the shockwave and the ghost wisp run faster; trail and spark spread grow with it.
+#define FUSE_SCALE        (FUSE_LEN / 120.0f)
+#define FUSE_TAIL         ((int)(14 * FUSE_SCALE))   // length of the glowing trail behind the spark (LEDs)
 
 #define FUSE_BURN_MS      6000    // time for the spark to run the fuse (match SOUND_1 length)
 #define FAKEOUT_ENABLED   1       // 1 = spark stalls, nearly dies, re-ignites with a flare
@@ -1391,7 +1498,8 @@ void draw_fuse(uint32_t ms) {
   // crackling sparks around the head
   if (stallFrac < 0.0f) {
     for (int s = 0; s < 3; s++) {
-      int idx = (int)head + random(-6, 7);
+      int spread = (int)(6 * FUSE_SCALE);
+      int idx = (int)head + random(-spread, spread + 1);
       if (idx >= 0 && idx < FUSE_LEN) strip.setPixelColor(LINE_START + idx, rgbf(255, 220, 100));
     }
   } else if (stallFrac > 0.7f && random(8) == 0) {   // last dying ember
@@ -1544,11 +1652,12 @@ void run_ledstrip_animation_2() {
         strip.setPixelColor(RING_START + j, fireColor(h));
       }
       // shockwave racing back down the fuse
-      float front = ms * 1.2f;                           // LEDs per ms
+      float front = ms * 1.2f * FUSE_SCALE;              // LEDs per ms: down the whole fuse in ~100 ms
+      float width = 25 * FUSE_SCALE;
       for (int i = 0; i < FUSE_LEN; i++) {
         float dist = (FUSE_LEN - 1 - i);
-        if (dist < front && dist > front - 25) {
-          float b = 1.0f - (front - dist) / 25.0f;
+        if (dist < front && dist > front - width) {
+          float b = 1.0f - (front - dist) / width;
           strip.setPixelColor(LINE_START + i, rgbf(255 * b, 220 * b, 160 * b));
         }
       }
@@ -1564,7 +1673,7 @@ void run_ledstrip_animation_2() {
         }
       }
       // purple ghost wisp drifting away from the ring along the fuse
-      float front = tC * 0.06f;                          // LEDs per ms
+      float front = tC * 0.06f * FUSE_SCALE;             // LEDs per ms: reaches the start in ~2 s
       for (int i = 0; i < FUSE_LEN; i++) {
         float dist = (FUSE_LEN - 1 - i);
         if (dist < front) {

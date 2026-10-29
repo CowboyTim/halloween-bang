@@ -10,7 +10,7 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Receives "BANG" messages via ESP-NOW from other devices
 - Plays sound effects and LED animations when triggered wirelessly
 - No DFPlayer on the BANGER in the default build: the light show runs on its own timers and the sound comes from the EXPLOSION box(es). Build with `-DBANGER_DFPLAYER` (`python3 bang.py build banger --flags=-DBANGER_DFPLAYER`) to put a DFPlayer back on the BANGER: then it boots with 3 tries (about 10 s), and without a working DFPlayer it still plays the full light show, just silent; reboot to get its sound back
-- Status LED: the S3 Zero's built-in RGB LED (a WS2812 on GPIO 21, bit-banged because the strip owns the RMT peripheral) shows dim green when ready, flickers orange while the show runs, and, only in a `-DBANGER_DFPLAYER` build, blinks yellow while the DFPlayer is missing
+- Status LED: the S3 Zero's built-in RGB LED (a WS2812 on GPIO 21, bit-banged because the strip owns the RMT peripheral) shows dim green when ready, dim blue during the 60 s cooldown after a show (BANGs are dropped), flickers orange while the show runs, and, only in a `-DBANGER_DFPLAYER` build, blinks yellow while the DFPlayer is missing
 - Use: `python3 bang.py deploy banger`
 - Status: built, flashed and working on the real board
 
@@ -23,7 +23,8 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - LOCK and FREE arrive over ESP-NOW and over 433 MHz (SRX882 on GPIO 6); the log line on release says which links delivered them (`lock came via: ESP-NOW 433 MHz`). Without the SRX882 wired, the 433 MHz path simply hears nothing and ESP-NOW works as before
 - **Wired killswitch (optional failsafe):** a normally-open switch to GND on a cable of up to about 10 m, wired to GPIO 1 of the BUTTON. Held = locked, OR'ed with the radio killswitch, so either one locks the button and the lamp behaves as before. A false lock blocks the button, so the line must stay LOW for 100 ms before it counts (releasing takes 30 ms), and like the radio lock it lasts 15 s at most: a stuck or shorted wire is ignored until it goes HIGH again, and a cut wire reads HIGH (button works). Wiring: twisted pair (signal + GND), a 2.2 kohm pull-up to 3.3 V at the BUTTON (the internal one is too weak for a long wire), 1 kohm in series with the pin and 100 nF from the pin to GND; see `docs/button_schematic.svg`. The release log line says which sources held the lock (`... wired`)
 - The arcade button lamp is a 12 V LED with a 470 ohm series resistor inside (about 20 mA), driven low-side by a 2N2222 on GPIO 7; see `docs/button_schematic.svg`
-- Lamp (PWM): LOCKED = dark, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s)
+- Lamp (PWM): LOCKED = dark, READY = slow breathing ("press me"), SHOW = fast flicker for `WAIT_TIME_BUTTON` (16 s), then dark for the cooldown (`SHOW_COOLDOWN_MS`, 60 s): the next show can start 76 s after a press at the earliest. A button still held 2 s after its press (a stuck contact) makes the lamp flicker; it starts no new show until it is let go
+- Cooldown: after every show the BANGER also drops every BANG for 60 s and then starts fresh, so a fault at the button (a stuck or intermittent contact) can never make shows follow each other back to back
 - Use: `python3 bang.py deploy button`
 - Status: built, flashed and working on the real board together with the BANGER
 
@@ -108,16 +109,37 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 
 ## LED Strip Layout
 
-One 5 m WS2812B strip (60 LED/m = 300 LEDs) on GPIO 4, cut logically in two parts (see the `LINE_*` / `RING_*` defines in `halloween-bang.ino`):
+Two 5 m WS2812B strips in one chain (60 LED/m = 600 LEDs) on GPIO 4, cut logically in two parts (see the `LINE_*` / `RING_*` defines in `halloween-bang.ino`):
 
 | Part | LEDs | Index range | Length |
 |------|------|-------------|--------|
-| Fuse (starts at the audience / button) | 120 | 0-119 | 2.0 m |
-| Ring (on the floor, closed circle) | 180 | 120-299 | 3.0 m circumference, ~0.95 m across |
+| Fuse (starts at the audience / button) | 420 | 0-419 | 7.0 m |
+| Ring (on the floor, closed circle) | 180 | 420-599 | 3.0 m circumference, ~0.95 m across |
 
-The fuse enters the ring at LED 120 and LED 299 sits right next to it (keep a normal LED pitch at that joint). Put that joint on the audience side: the fire races around both arms and meets behind the vampire. To change the ring size, only change `LINE_END` and `RING_START`; everything else is computed from them.
+The fuse enters the ring at LED 420 and LED 599 sits right next to it (keep a normal LED pitch at that joint). Put that joint on the audience side: the fire races around both arms and meets behind the vampire. To change the ring size, only change `LINE_END` and `RING_START`; everything else is computed from them. The show's timing does not change with the fuse length (the sound is fixed): a longer fuse burns faster (`FUSE_SCALE`).
 
-Power: 300 LEDs at full white can pull several amps. Inject 5 V / GND at the start and ideally at the fuse/ring joint (LED 120), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and a 1000 uF electrolytic capacitor (10-16 V rated, + to 5 V) across 5 V / GND at the strip start (see `docs/banger_schematic.svg`). The 330 ohm protects the first LED, the capacitor absorbs the current steps of the white flash. A 74AHCT125 level shifter on the data line is the proper fix if the first LEDs flicker, since the ESP32 outputs 3.3 V and a 5 V WS2812B formally wants about 3.5 V. The DFPlayer runs from 5 V, so its TX and BUSY lines each need 1 kohm in series (required; the ESP pins are not 5 V tolerant). No pull-down on BUSY. The 1 kohm on ESP TX -> DFPlayer RX is optional (can reduce hiss). Put 470 uF / 16 V (+ to 5 V) and 100 nF across the DFPlayer's VCC and GND pins, right at the pins (see `docs/banger_schematic.svg`).
+Power: 600 LEDs at full white can pull many amps. Each WS2812B also draws about 1 mA when dark, so 600 LEDs take roughly 0.6 A before anything lights up. Inject 5 V / GND at the start, at the joint of the two strips (LED 300) and at the fuse/ring joint (LED 420), use at least a 5 V / 4 A supply, a 300-470 ohm resistor on the data line, and a 1000 uF electrolytic capacitor (10-16 V rated, + to 5 V) across 5 V / GND at the strip start (see `docs/banger_schematic.svg`). The 330 ohm protects the first LED, the capacitor absorbs the current steps of the white flash. A 74AHCT125 level shifter on the data line is the proper fix if the first LEDs flicker, since the ESP32 outputs 3.3 V and a 5 V WS2812B formally wants about 3.5 V. The DFPlayer runs from 5 V, so its TX and BUSY lines each need 1 kohm in series (required; the ESP pins are not 5 V tolerant). No pull-down on BUSY. The 1 kohm on ESP TX -> DFPlayer RX is optional (can reduce hiss). Put 470 uF / 16 V (+ to 5 V) and 100 nF across the DFPlayer's VCC and GND pins, right at the pins (see `docs/banger_schematic.svg`).
+
+## Power measurements (2026-10-29)
+
+Measured with an inline USB power meter (Joy-IT JT-UM120, about 100 readings per second) in the BANGER's 5 V supply line. The meter's reading covers everything on that line: the BANGER and the strips. Show runs were triggered from the BUTTON.
+
+| Condition | Current (A) | Voltage at meter (V) |
+|-----------|-------------|----------------------|
+| Boards only, both strips unplugged | 0.141 | 4.86 |
+| Boards + one strip, idle (nothing lit) | 0.286 | 4.77 |
+| Boards + both strips, idle (nothing lit) | 0.42 | not logged |
+| Show, one strip (fuse only, no ring): peak | 0.385 (+0.10 over idle) | 4.71 |
+| Show, both strips: peak at the kaboom flash (17.5 s) | 0.684 (+0.26 over idle) | 4.53 |
+
+What the numbers say:
+
+- **Idle draw:** each strip draws about 0.14 A with every LED dark, about 0.5 mA per LED. That fits the ~1 mA per dark WS2812B above, so it's probably the chips' normal quiescent current, not a fault.
+- **Show peak:** the highest draw is the kaboom flash, when the white ring and the shockwave are lit together. It is only in the log when the second strip (the ring) is connected.
+- **Supply:** the whole line peaks at about 0.7 A, so a 500 mA charger is too small. A 2 A supply covers the peak with margin.
+- **Voltage:** the meter reads 4.5-4.8 V under these loads. The strip's wiring takes part of the drop, so measure at the strip's start and end to see the real drop.
+
+Not yet checked: how much of the idle draw belongs to each strip with the data line disconnected, and the draw on the second strip alone.
 
 ## Strobe LED (STROBO box)
 

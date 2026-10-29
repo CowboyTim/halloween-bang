@@ -127,15 +127,39 @@ def boards_of(boards, role):
     return [b for b in boards.values() if b.role == role]
 
 
-LAST_FIRE = [0.0]      # host time of the last "fire" to the BUTTON: it waits WAIT_TIME_BUTTON (16 s) after a show
+LAST_FIRE = [0.0]      # host time of the last show started from the BUTTON
+# WAIT_TIME_BUTTON and SHOW_COOLDOWN_MS of the firmware, read from the status replies (seconds)
+TIMING = {"wait": 16.0, "cooldown": 60.0}
+
+
+def button_cycle():
+    """A press after a show counts only after WAIT_TIME_BUTTON + SHOW_COOLDOWN_MS (+1 s margin)."""
+    return TIMING["wait"] + TIMING["cooldown"] + 1
+
+
+BANGER_REF = [None]
+
+
+def wait_banger_ready():
+    """Wait until the BANGER's cooldown after its last show is over (it drops every BANG until then)."""
+    banger = BANGER_REF[0]
+    if not banger:
+        return
+    starts = [ht for ht, tx in banger.since(0) if "cooldown: " in tx]
+    if starts and not banger.find(r"cooldown over", starts[-1]):
+        print("  (waiting for the BANGER's cooldown)", flush=True)
+        banger.wait(r"cooldown over", starts[-1], TIMING["cooldown"] + 30)
+        time.sleep(0.5)
 
 
 def wait_button_ready():
-    """The BUTTON takes a press only WAIT_TIME_BUTTON (16 s) after the last one: wait that out."""
+    """Wait out the BUTTON's show + cooldown after the last show it started, and the BANGER's cooldown."""
     if LAST_FIRE[0]:
-        left = LAST_FIRE[0] + 17 - time.monotonic()
+        left = LAST_FIRE[0] + button_cycle() - time.monotonic()
         if left > 0:
+            print(f"  (waiting {left:.0f} s for the BUTTON's show + cooldown)", flush=True)
             time.sleep(left)
+    wait_banger_ready()
 
 
 # ---- tests --------------------------------------------------------------------------------------
@@ -146,9 +170,10 @@ def test_status(boards, c):
     for b in boards.values():
         b.send("status")
     for b in boards.values():
-        hit = b.wait(rf"TEST status role={b.role} reset=(\w+) heap=(\d+)", t, 3)
+        hit = b.wait(rf"TEST status role={b.role} reset=(\w+) heap=(\d+) wait=(\d+) cooldown=(\d+)", t, 3)
         c.check(hit, f"{b.name} ({b.role}) answers status" + ("" if hit else " - no answer: is it the TEST build?"))
         if hit:
+            TIMING["wait"], TIMING["cooldown"] = int(hit[1].group(3)) / 1000, int(hit[1].group(4)) / 1000
             reset = hit[1].group(1)
             # brownout / panic / watchdog since the last flash = the board was reset by something: say so
             c.check(reset not in ("brownout", "panic", "wdt", "glitch"),
@@ -207,10 +232,11 @@ def test_single_show(boards, c):
 
 
 def test_repeat(boards, c, shows):
-    c.begin(f"repeat: {shows} shows back to back from the BANGER (the 'few tries' failure)")
+    c.begin(f"repeat: {shows} shows from the BANGER, each after the cooldown (the 'few tries' failure)")
     banger = role_board(boards, "BANGER")
     expl, strobo = boards_of(boards, "EXPLOSION"), boards_of(boards, "STROBO")
     durations, heaps = [], []
+    wait_banger_ready()
     for i in range(1, shows + 1):
         t0 = time.monotonic()
         banger.send("fire")
@@ -224,7 +250,9 @@ def test_repeat(boards, c, shows):
         hit = banger.find(r"SHOW done .* heap=(\d+)", t0)
         if hit:
             heaps.append(int(hit[1].group(1)))
-        time.sleep(2)
+        if i < shows:
+            banger.wait(r"cooldown over", t0, TIMING["cooldown"] + 30)
+            time.sleep(1)
     reset = [tx for b in boards.values() for _, tx in b.since(0) if RESET_RE.search(tx)]
     c.check(not reset, f"no reset or crash in {shows} shows" + (f": {reset[0]}" if reset else ""))
     if len(heaps) > 1:
@@ -260,7 +288,7 @@ def test_lock(boards, c):
 
 
 def test_lock_during_show(boards, c):
-    c.begin("lock_during_show: a lock during the show does not stop it; the BUTTON locks after it")
+    c.begin("lock_during_show: a lock during the show does not stop it; the BUTTON locks after the cooldown if held")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
     banger = role_board(boards, "BANGER")
@@ -270,12 +298,16 @@ def test_lock_during_show(boards, c):
     LAST_FIRE[0] = t0
     c.check(button.wait(r"ADHD style sending BANG", t0, 3), "show requested from the BUTTON")
     time.sleep(2)
-    ks.send("lock")
+    ks.send("lock")                      # a lock during the show
     hit = banger.wait(r"SHOW done ms=\d+ duration=(\d+)", t0, 25)
     c.check(hit and SHOW_MIN_MS <= int(hit[1].group(1)) <= SHOW_MAX_MS,
             "the show ran to the end while locked")
-    hit = button.wait(r"BUTTON state 3 -> 0", t0, 20)
-    c.check(hit, "BUTTON locks when the show is over (still held)")
+    ks.send("free")
+    # a lock lasts 15 s at most: hold it again over the end of the BUTTON's show + cooldown
+    time.sleep(max(0, t0 + TIMING["wait"] + TIMING["cooldown"] - 5 - time.monotonic()))
+    ks.send("lock")
+    hit = button.wait(r"BUTTON state 3 -> 0", t0, button_cycle() + 10)
+    c.check(hit, "BUTTON locks when the show + cooldown is over (still held)")
     ks.send("free")
     c.check(button.wait(r"killswitch released, button works again", t0, 3), "BUTTON unlocks on release")
 
@@ -305,7 +337,7 @@ def test_mash_button(boards, c):
     for _ in range(30):
         button.send("fire")
         time.sleep(0.2)
-    time.sleep(max(0, t0 + 17 - time.monotonic()))     # past the BUTTON's wait
+    time.sleep(max(0, t0 + button_cycle() - time.monotonic()))     # past the BUTTON's show + cooldown
     bangs = len([1 for _, tx in button.since(t0) if "ADHD style sending BANG" in tx])
     shows = len([1 for _, tx in banger.since(t0) if "SHOW start" in tx])
     c.check(bangs == 1, f"the BUTTON sent BANG {bangs} time(s) for 30 presses (expected 1)")
@@ -332,19 +364,20 @@ def test_lock_storm(boards, c):
 
 
 def test_lock_press_race(boards, c):
-    c.begin("lock_press_race: a lock and a press within 50 ms, 5 times: the BUTTON never ends up stuck")
+    c.begin("lock_press_race: a lock and a press within 50 ms, 3 times: the BUTTON never ends up stuck")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
-    for i in range(1, 6):
+    for i in range(1, 4):
         wait_button_ready()
         t = time.monotonic()
         ks.send("lock")
         time.sleep(0.05)
         button.send("fire")
-        LAST_FIRE[0] = t
         time.sleep(0.5)
         ks.send("free")
         time.sleep(1)
+        if button.find(r"ADHD style sending BANG", t):
+            LAST_FIRE[0] = t                 # the press won the race: a show + cooldown to wait out
         ok = button.find(r"killswitch released", t) or button.find(r"ADHD style sending BANG", t)
         c.check(ok, f"round {i}: the BUTTON is unlocked after the release")
     wait_button_ready()
@@ -354,23 +387,110 @@ def test_lock_press_race(boards, c):
     c.check(button.wait(r"ADHD style sending BANG", t, 3), "the BUTTON fires after the races")
 
 
+def count(board, text, t):
+    return len([1 for _, tx in board.since(t) if text in tx])
+
+
+def test_button_glitch(boards, c):
+    c.begin("button_glitch: noise spikes on the button pin (interrupt edges, pin HIGH again) start no show")
+    button = role_board(boards, "BUTTON")
+    banger = role_board(boards, "BANGER")
+    wait_button_ready()
+    t0 = time.monotonic()
+    for _ in range(20):
+        button.send("glitch")
+        time.sleep(0.05)
+    time.sleep(3)
+    c.check(count(button, "ADHD style sending BANG", t0) == 0, "no BANG from 20 glitches")
+    c.check(count(banger, "SHOW start", t0) == 0, "no show on the BANGER")
+    c.check(button.wait(r"short glitch\(es\) ignored", t0, 12), "the BUTTON logs the ignored glitches")
+
+
+def test_button_stuck(boards, c):
+    c.begin("button_stuck: a button stuck down starts ONE show, not one after every cooldown")
+    button = role_board(boards, "BUTTON")
+    banger = role_board(boards, "BANGER")
+    wait_button_ready()
+    t0 = time.monotonic()
+    button.send("hold")
+    LAST_FIRE[0] = t0
+    stuck_s = button_cycle() + 20        # past one whole show + cooldown while stuck
+    c.check(button.wait(r"stuck\?", t0, 5), "the BUTTON reports the stuck button (its lamp flickers)")
+    time.sleep(max(0, t0 + stuck_s - time.monotonic()))
+    bangs = count(button, "ADHD style sending BANG", t0)
+    shows = count(banger, "SHOW start", t0)
+    c.check(bangs == 1, f"the BUTTON sent BANG {bangs} time(s) in {stuck_s:.0f} s stuck (expected 1)")
+    c.check(shows == 1, f"the BANGER started {shows} show(s) (expected 1)")
+    t = time.monotonic()
+    button.send("release")
+    time.sleep(1)
+    c.check(count(button, "ADHD style sending BANG", t) == 0, "letting go is not a press")
+    c.check(button.find(r"button let go", t), "the BUTTON reports that it was let go")
+    t = time.monotonic()
+    button.send("fire")
+    LAST_FIRE[0] = t
+    c.check(button.wait(r"ADHD style sending BANG", t, 3), "a real press after the release starts a show")
+
+
+def test_button_chatter(boards, c):
+    c.begin("button_chatter: a chattering contact (5 ms on/off) for 20 s starts no show")
+    button = role_board(boards, "BUTTON")
+    banger = role_board(boards, "BANGER")
+    wait_button_ready()
+    t0 = time.monotonic()
+    button.send("chatter")
+    time.sleep(20)
+    button.send("release")
+    time.sleep(1)
+    c.check(count(button, "ADHD style sending BANG", t0) == 0, "no BANG from 20 s of chatter")
+    c.check(count(banger, "SHOW start", t0) == 0, "no show on the BANGER")
+
+
+def test_cooldown(boards, c):
+    c.begin("cooldown: after a show the BANGER drops BANGs for SHOW_COOLDOWN_MS, then starts fresh")
+    banger = role_board(boards, "BANGER")
+    wait_banger_ready()
+    t0 = time.monotonic()
+    banger.send("fire")
+    hit = banger.wait(r"SHOW done", t0, 25)
+    c.check(hit, "first show done")
+    t = time.monotonic()
+    banger.send("fire")                  # inside the cooldown
+    c.check(banger.wait(r"BANG ignored: cooldown", t, 3), "a BANG in the cooldown is dropped")
+    c.check(not banger.wait(r"SHOW start", t, 3), "no second show in the cooldown")
+    hit = banger.wait(r"cooldown over", t0, TIMING["cooldown"] + 30)
+    if hit and c.check(hit, "the cooldown ends"):
+        done = banger.find(r"SHOW done", t0)
+        if done:
+            d = hit[0] - done[0]
+            c.check(abs(d - TIMING["cooldown"]) < 2, f"cooldown lasted {d:.1f} s (expected {TIMING['cooldown']:.0f})")
+    t = time.monotonic()
+    banger.send("fire")
+    c.check(banger.wait(r"SHOW start", t, 3), "a BANG after the cooldown starts a show")
+    banger.wait(r"cooldown over", t, TIMING["cooldown"] + 30)
+
+
 TESTS = {
     "single_show": (test_single_show, ["BUTTON", "BANGER"]),
     "repeat": (test_repeat, ["BANGER"]),
+    "cooldown": (test_cooldown, ["BANGER"]),
     "mash_button": (test_mash_button, ["BUTTON", "BANGER"]),
+    "button_glitch": (test_button_glitch, ["BUTTON", "BANGER"]),
+    "button_stuck": (test_button_stuck, ["BUTTON", "BANGER"]),
+    "button_chatter": (test_button_chatter, ["BUTTON", "BANGER"]),
     "lock_storm": (test_lock_storm, ["BUTTON", "KILLSWITCH"]),
     "lock_press_race": (test_lock_press_race, ["BUTTON", "KILLSWITCH"]),
     "lock": (test_lock, ["BUTTON", "KILLSWITCH"]),
     "lock_during_show": (test_lock_during_show, ["BUTTON", "BANGER", "KILLSWITCH"]),
     "lock_expiry": (test_lock_expiry, ["BUTTON", "KILLSWITCH"]),
 }
-ORDER = ["single_show", "repeat", "mash_button", "lock", "lock_storm", "lock_press_race", "lock_during_show", "lock_expiry"]
+ORDER = ["single_show", "repeat", "cooldown", "mash_button", "button_glitch", "button_stuck", "button_chatter", "lock", "lock_storm", "lock_press_race", "lock_during_show", "lock_expiry"]
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("tests", nargs="*", help=f"tests to run: {', '.join(ORDER)} (default: all)")
-    p.add_argument("--shows", type=int, default=10, help="shows in the repeat test (default 10)")
+    p.add_argument("--shows", type=int, default=4, help="shows in the repeat test (default 4; each waits out the cooldown)")
     args = p.parse_args()
     names = args.tests or ORDER
     for n in names:
@@ -409,6 +529,7 @@ def main():
     time.sleep(1.5)                  # let the boards print their boot lines
 
     c = Checks()
+    BANGER_REF[0] = role_board(boards, "BANGER")
     print(f"boards: {', '.join(f'{b.name} ({b.role}) on {b.port}' for b in boards.values())}")
     print(f"logs: {out_dir}")
     test_status(boards, c)
