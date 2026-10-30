@@ -50,7 +50,7 @@ far above that and far below a visible delay.
 - **A missing box.** The show must run without an EXPLOSION or STROBO box. Unplug one and run
   `single_show` by hand (the checks for that box will fail, the show must still run).
 - **The sound.** Only that the boxes received the message. Use a phone microphone for the timing offset.
-- **Mains and radio interference** for the KILLSWITCH's 433 MHz link: see `TODO.md`.
+- **Mains and radio interference** for the KILLSWITCH's ESP-NOW link: see `TODO.md`.
 
 ## Results
 

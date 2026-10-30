@@ -4,12 +4,9 @@ Status as of 2026-10-16 (evening). "Won't do" items are kept on purpose, so the 
 
 ## Open
 
-- **KILLSWITCH range: solved with a second link (433 MHz), still to finish.** ESP-NOW alone: 10-68% at 7 m. 433 MHz ASK (STX882/SRX882, 2000 bit/s, 17 cm wire antennas): 100% at 4 m, 7 m (one wall) and 10 m (two walls). The firmware now sends LOCK/FREE on both links and the BUTTON accepts either. Still to do:
-  - test each link alone at distance (the BUTTON log says which delivered a lock),
+- **KILLSWITCH range (ESP-NOW only now).** The 433 MHz STX882 is not fitted and its transmit path was removed from the KILLSWITCH build (2026-10-30). ESP-NOW alone: 10-68% at 7 m, so range is still open. Still to do:
   - test the KILLSWITCH held in a hand / pocket with the body between it and the BUTTON,
-  - verify RadioHead's timer ISR and ESP-NOW run together on the BUTTON for a long time (hours), and that the lamp PWM is unaffected,
-  - solder the SRX882 into the BUTTON (5 V, DATA via 1 kohm to GPIO 6, 17 cm antenna) and the STX882 into the KILLSWITCH; mount the antennas straight and away from metal,
-  - check the STX882's supply range (3.3 V works; 5 V would give more power, but only after the datasheet allows it).
+  - if range is still a problem, fit the STX882 and SRX882 again (the BUTTON takes either link) and put the 433 MHz transmit path back in the KILLSWITCH build.
 - **Wired killswitch on the BUTTON (GPIO 1):** code and schematic done, filter tested off-board, short-cable bench test OK (2026-10-16), not yet tried with the real 10 m cable. Still to test with the real cable: no false locks near mains cables or the strobe supply, release feels instant, shorting the wire expires after 15 s.
 - **STROBO box** (add-on): one flash at the KABOOM now (150 ms, PWM brightness `STROBO_BRIGHTNESS`), no strobing (2026-10-27). Connected and flashed. Still to do: choose the brightness on site, check a full show with the box at its real place (`docs/strobo_schematic.svg`).
 - **Boxes:** decided 2026-10-16: one EXPLOSION box and one STROBO box. The code still supports any number (one `[boards.*]` entry each).

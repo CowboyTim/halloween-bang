@@ -17,8 +17,9 @@
  #define UART1         Serial1
 #endif // UART_LOG_DEV_UART0
 
-// 433 MHz link (RadioHead): only the BUTTON (receiver) and the KILLSWITCH (transmitter) use it
-#if defined(BUTTON) || defined(KILLSWITCH)
+// 433 MHz link (RadioHead): only the BUTTON (receiver) uses it. The KILLSWITCH has no STX882 fitted,
+// so it sends over ESP-NOW only (its 433 MHz transmit path is compiled out).
+#if defined(BUTTON)
 #define USE_RF433 1
 #else
 #define USE_RF433 0
@@ -316,7 +317,7 @@ void setup_cpu_speed(uint32_t freq_mhz = 160) {
 
 #if USE_RF433
 // 433 MHz ASK link for LOCK / FREE, next to ESP-NOW (either one is enough: both feed the same lock timer).
-// KILLSWITCH: STX882 DATA on RF433_TX_PIN. BUTTON: SRX882 DATA through 1 kohm on RF433_RX_PIN, 5 V.
+// BUTTON: SRX882 DATA through 1 kohm on RF433_RX_PIN, 5 V. (The KILLSWITCH's STX882 on RF433_TX_PIN is not used.)
 // RadioHead configures all three pins, so none of them may be used for anything else (the lamp is GPIO 7).
 #define RF433_BITRATE   2000    // bits per second; one packet takes about 70 ms on the air
 #define RF433_TX_PIN    4

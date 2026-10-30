@@ -2,7 +2,7 @@
   <rect width="1100" height="900" fill="#ffffff"/>
 
   <text x="30" y="44" font-size="26" font-weight="bold" fill="#1b1b1b">KILLSWITCH unit (optional) - ESP32-C3 SuperMini</text>
-  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Dashed = optional. GPIO 3 = push button, GPIO 10 = lock switch LED, GPIO 4 = 433 MHz DATA.</text>
+  <text x="30" y="70" font-size="14" fill="#555">Build flag -DKILLSWITCH. Dashed = optional. GPIO 3 = push button, GPIO 10 = lock switch LED. ESP-NOW only (no 433 MHz).</text>
 
   <!-- whole unit is optional -->
   <rect x="14" y="84" width="1072" height="684" rx="14" fill="none" stroke="#777" stroke-width="3" stroke-dasharray="14 8"/>
@@ -24,7 +24,7 @@
   <rect x="380" y="138" width="250" height="420" rx="12" fill="#e8f0fe" stroke="#1a237e" stroke-width="3"/>
   <text x="505" y="196" font-size="20" font-weight="bold" fill="#1a237e" text-anchor="middle">ESP32-C3</text>
   <text x="505" y="220" font-size="20" font-weight="bold" fill="#1a237e" text-anchor="middle">SuperMini</text>
-  <text x="505" y="262" font-size="13" fill="#444" text-anchor="middle">ESP-NOW (Wi-Fi) and 433 MHz</text>
+  <text x="505" y="262" font-size="13" fill="#444" text-anchor="middle">ESP-NOW (Wi-Fi) only</text>
   <text x="505" y="280" font-size="13" fill="#444" text-anchor="middle">to the BUTTON unit</text>
 
   <!-- on-board parts -->
@@ -57,7 +57,7 @@
   <!-- ===== pins to avoid (left) ===== -->
   <rect x="40" y="440" width="300" height="200" rx="10" fill="#f6f7f9" stroke="#adb5bd" stroke-width="1.5"/>
   <text x="56" y="466" font-size="14" font-weight="bold" fill="#222">Other free pins</text>
-  <text x="56" y="488" font-size="12" fill="#333">0, 1, 7 (10: lock switch LED; 4, 5, 6: 433 MHz link)</text>
+  <text x="56" y="488" font-size="12" fill="#333">0, 1, 7 (10: lock switch LED; 4, 5, 6: unused)</text>
   <text x="56" y="518" font-size="14" font-weight="bold" fill="#222">Do not use</text>
   <text x="56" y="540" font-size="12" fill="#333">2, 8, 9: boot strapping</text>
   <text x="56" y="558" font-size="12" fill="#333">  (8 = blue LED, 9 = BOOT button)</text>
@@ -105,8 +105,8 @@
   <text x="48" y="850" font-size="14" font-weight="bold" fill="#222">LED</text>
   <text x="48" y="870" font-size="13" fill="#333">on while held (locking), fast blink = 15 s are over (release it), 1 blink at power-up. The BUTTON's own lamp shows whether it is locked.</text>
   <rect x="40" y="122" width="320" height="214" rx="8" fill="#fffdf5" stroke="#b45309" stroke-width="2" stroke-dasharray="7 4"/>
-  <text x="52" y="142" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">433 MHz transmitter (second path</text>
-  <text x="52" y="157" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">for LOCK / FREE)</text>
+  <text x="52" y="142" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">433 MHz transmitter: not fitted,</text>
+  <text x="52" y="157" font-size="12" font-weight="bold" fill="#b45309" text-anchor="start">removed from the build)</text>
   <rect x="54" y="172" width="120" height="116" rx="6" fill="#fff8e1" stroke="#f9a825" stroke-width="2.5"/>
   <text x="114" y="194" font-size="14" font-weight="bold" fill="#e65100" text-anchor="middle">STX882</text>
   <text x="114" y="211" font-size="11" font-weight="normal" fill="#444" text-anchor="middle">433 MHz ASK</text>
@@ -123,6 +123,6 @@
   <line x1="174" y1="282" x2="196" y2="282" stroke="#111" stroke-width="3"/>
   <text x="168" y="286" font-size="10" font-weight="bold" fill="#111" text-anchor="end">GND</text>
   <text x="202" y="286" font-size="11" font-weight="bold" fill="#111" text-anchor="start">to a GND pin</text>
-  <text x="52" y="312" font-size="11" font-weight="normal" fill="#555" text-anchor="start">Sent on both links: ESP-NOW and 433 MHz.</text>
-  <text x="52" y="326" font-size="11" font-weight="normal" fill="#555" text-anchor="start">Tested: 100% at 4 m, 7 m (1 wall), 10 m (2 walls).</text>
+  <text x="52" y="312" font-size="11" font-weight="normal" fill="#555" text-anchor="start">Not used: LOCK / FREE go over ESP-NOW only.</text>
+  <text x="52" y="326" font-size="11" font-weight="normal" fill="#555" text-anchor="start">Earlier range test with a module: 100% at 4 m, 7 m (1 wall), 10 m (2 walls).</text>
 </svg>
