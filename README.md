@@ -62,9 +62,9 @@ The show: a 1980s cartoon **ACME fuse** sparks along a 2 m LED strip towards a *
 - Status: working on the bench with the DFPlayer on 5 V. The 1 kΩ values and the BUSY idle level are not measured yet
 
 ### STROBO Mode (optional strobe box)
-- An add-on box with its own ESP32 that fires one flash at the KABOOM, for a flash the BANGER cannot be cabled to. The BANGER has no strobe of its own; the box is extra
-- The BANGER sends `STRB` when its KABOOM animation starts. The box then fires ONE flash of `STROBO_FLASH_MS` (150 ms) at `STROBO_BRIGHTNESS` (0-255, PWM on the gate: 255 = full, lower = dimmer). No strobing: a single flash, so nobody gets a flashing sequence
-- Safety: the flash ends by itself and the PWM goes to 0; a new `STRB` within 5 s of a flash is ignored, so repeats or a glitch cannot re-fire it; it boots with the output off
+- An add-on box with its own ESP32 that fires a short burst of flashes at the KABOOM, for a flash the BANGER cannot be cabled to. The BANGER has no strobe of its own; the box is extra
+- The BANGER sends `STRB` when its KABOOM animation starts. The box then fires a burst of `STROBO_FLASHES` (6) flashes of `STROBO_ON_MS` (80 ms), `STROBO_OFF_MS` (120 ms) apart, at `STROBO_BRIGHTNESS` (0-255, PWM on the gate: 255 = full, lower = dimmer). About 1 s in all, with the chips on for about 0.5 s
+- Safety: the burst ends by itself (hard stop after `STROBO_MAX_BURST_MS`, 2 s) and the PWM goes to 0; a new `STRB` within 5 s of a burst is ignored, so repeats or a glitch cannot re-fire it; it boots with the output off
 - Hardware: strobe pin GPIO 5 -> 220 ohm -> gate of a logic-level N-MOSFET (10 kohm gate to GND). With a D4184 trigger module instead, no gate resistors: GPIO 5 goes straight to the module's trigger input (see "Strobe LED (STROBO box)" for its wiring); LEDs on their own supply (5 V or 12 V) with a series resistor, GND shared. The built-in LED (C3, GPIO 8) is lit when ready and flickers during the burst. See `docs/strobo_schematic.svg`; the LED values are chosen once the LEDs are known
 - To add it: `python3 bang.py identify <port>`, put the MAC in `boards.toml` under `[boards.strobo]`, `python3 bang.py deploy strobo`, then `python3 bang.py deploy banger`. Several boxes are possible, like EXPLOSION
 - Aim it away from people's eyes; flashes at 8-10 Hz are in the photosensitive-epilepsy range (see the strobe notes below)
@@ -104,7 +104,7 @@ SVG, editable, up to date. Dashed boxes are optional or planned parts.
 | `docs/banger_schematic.svg` | BANGER: ESP32-S3 Zero, LED strip, master trigger (DFPlayer only with `-DBANGER_DFPLAYER`) |
 | `docs/button_schematic.svg` | BUTTON: SuperMini, MT3608, 2N2222 lamp driver, arcade button |
 | `docs/killswitch_schematic.svg` | KILLSWITCH (optional): C3 SuperMini, push button (on-board BOOT button and LED) |
-| `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, 3 LED chips on their own 12 V supply, one flash |
+| `docs/strobo_schematic.svg` | STROBO (optional): C3 SuperMini, MOSFET, 3 LED chips on their own 12 V supply, a short burst of flashes |
 | `docs/explosion_schematic.svg` | EXPLOSION (optional): C3 SuperMini, DFPlayer Mini on 5 V, 3 W speaker, 1 kΩ on the DFPlayer lines |
 
 ## LED Strip Layout

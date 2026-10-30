@@ -1578,16 +1578,27 @@ void run_ledstrip_animation_1() {
 // -------------------------------------------------------------------------
 
 // ---- STROBO box ----------------------------------------------------------------------------
-// Fires ONE flash (like a flashbang, no strobing) when the BANGER sends "STRB" (the moment its
-// animation 2 starts). The flash is PWM on the MOSFET gate, so STROBO_BRIGHTNESS dims it.
-// Safety: the flash ends by itself after STROBO_FLASH_MS, the pin is forced LOW afterwards, and a
-// new STRB within STRB_MIN_GAP_MS of the last flash is ignored, so repeats or a glitch cannot re-fire it.
-#define STRB_MIN_GAP_MS     5000
-#define STROBO_FLASH_MS     150     // length of the one flash
-#define STROBO_BRIGHTNESS   255     // 0-255 PWM duty of the flash: 255 = full, lower = dimmer
+// Fires a short BURST of flashes when the BANGER sends "STRB" (the moment its animation 2 starts).
+// The flashes are PWM on the MOSFET gate, so STROBO_BRIGHTNESS dims them. Everything is bounded:
+// STROBO_FLASHES flashes of STROBO_ON_MS with STROBO_OFF_MS dark between them, a hard stop after
+// STROBO_MAX_BURST_MS whatever the timing says, and a new STRB within STRB_MIN_GAP_MS of the last
+// burst is ignored, so repeats or a glitch cannot re-fire it. The pin is forced LOW between and after
+// the flashes. The COB chips are on for STROBO_FLASHES * STROBO_ON_MS only (480 ms at the defaults).
+#define STRB_MIN_GAP_MS     5000    // must stay longer than STROBO_MAX_BURST_MS (checked below)
+#define STROBO_FLASHES      6       // flashes in one burst
+#define STROBO_ON_MS        80      // length of one flash
+#define STROBO_OFF_MS       120     // dark between two flashes
+#define STROBO_MAX_BURST_MS 2000    // hard stop for the whole burst
+#define STROBO_BRIGHTNESS   255     // 0-255 PWM duty of each flash: 255 = full, lower = dimmer
 #define STROBO_PWM_HZ      5000     // PWM frequency (well above flicker); STROBO_BRIGHTNESS only scales the level
-uint32_t strobo_t0      = 0;        // millis() when the running flash started (0 = idle)
-uint32_t strobo_last_ms = 0;        // when the last flash started (0 = none yet)
+#if STRB_MIN_GAP_MS <= STROBO_MAX_BURST_MS
+#error "STRB_MIN_GAP_MS must be longer than STROBO_MAX_BURST_MS, or a burst can be re-fired while it runs"
+#endif
+uint32_t strobo_burst_t0 = 0;       // millis() when the running burst started (0 = idle)
+uint32_t strobo_phase_ms = 0;       // millis() when the current flash or dark gap started
+uint8_t  strobo_fired    = 0;       // flashes started in the running burst
+uint8_t  strobo_on       = 0;       // 1 = a flash is on now
+uint32_t strobo_last_ms  = 0;       // when the last burst started (0 = none yet)
 
 void strobo_setup(){
   esp_now_register_recv_cb(OnDataRecv);
@@ -1601,28 +1612,49 @@ void strobo_setup(){
   LOG("STROBO ready, strobe pin %d", (int)STROBE_PIN);
 }
 
+static void strobo_set(uint8_t on){
+  strobo_on = on;
+  ledcWrite(STROBE_PIN, on ? STROBO_BRIGHTNESS : 0);
+}
+
 void do_strobo_loop(){
   uint32_t now = millis();
   if(strb_req){
     strb_req = 0;
     LOG("STRB received ms=%lu", (unsigned long)now);
-    if(!strobo_t0 && (!strobo_last_ms || now - strobo_last_ms >= STRB_MIN_GAP_MS)){
-      strobo_t0 = strobo_last_ms = now ? now : 1;
-      ledcWrite(STROBE_PIN, STROBO_BRIGHTNESS);
-      LOG("STRB: flash on ms=%lu", (unsigned long)now);
+    if(!strobo_burst_t0 && (!strobo_last_ms || now - strobo_last_ms >= STRB_MIN_GAP_MS)){
+      strobo_burst_t0 = strobo_last_ms = now ? now : 1;
+      strobo_phase_ms = now;
+      strobo_fired = 1;
+      strobo_set(1);
+      LOG("STRB: flash on ms=%lu (burst of %d)", (unsigned long)now, STROBO_FLASHES);
     } else {
-      LOG("STRB ignored (flash running or within %d s)", STRB_MIN_GAP_MS / 1000);
+      LOG("STRB ignored (burst running or within %d s)", STRB_MIN_GAP_MS / 1000);
     }
   }
-  if(strobo_t0 && now - strobo_t0 >= STROBO_FLASH_MS){
-    ledcWrite(STROBE_PIN, 0);
-    strobo_t0 = 0;
-    LOG("STRB: flash off ms=%lu", (unsigned long)now);
+  if(strobo_burst_t0){
+    bool stop = now - strobo_burst_t0 >= STROBO_MAX_BURST_MS;
+    if(!stop){
+      if(strobo_on && now - strobo_phase_ms >= STROBO_ON_MS){
+        strobo_set(0);
+        strobo_phase_ms = now;
+        if(strobo_fired >= STROBO_FLASHES) stop = true;
+      } else if(!strobo_on && now - strobo_phase_ms >= STROBO_OFF_MS){
+        strobo_set(1);
+        strobo_phase_ms = now;
+        strobo_fired++;
+      }
+    }
+    if(stop){
+      strobo_set(0);
+      strobo_burst_t0 = 0;
+      LOG("STRB: flash off ms=%lu (%d flashes)", (unsigned long)now, strobo_fired);
+    }
   }
 #ifdef EXPL_LED_PIN
-  // LED: lit when ready, goes dark for the flash. The 12 V strobe LEDs need the 12 V brick, so on USB-C
-  // power alone this blink is the only sign that the flash fired
-  uint8_t led_on = strobo_t0 ? 0 : 1;
+  // LED: lit when ready, dark for the whole burst. The 12 V strobe LEDs need the 12 V brick, so on USB-C
+  // power alone this blink is the only sign that the burst fired
+  uint8_t led_on = strobo_burst_t0 ? 0 : 1;
   digitalWrite(EXPL_LED_PIN, led_on ? EXPL_LED_ON : !EXPL_LED_ON);
 #endif
   delay(1);
