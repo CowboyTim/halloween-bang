@@ -264,21 +264,21 @@ def test_repeat(boards, c, shows):
 
 
 def test_lock(boards, c):
-    c.begin("lock: KILLSWITCH held locks the BUTTON, released unlocks it")
+    c.begin("lock: a KILLSWITCH lock locks the BUTTON, the unlock (FREE) unlocks it")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
     wait_button_ready()
     t = time.monotonic()
     ks.send("lock")
-    c.check(ks.wait(r"KILLSWITCH held: sending LOCK", t, 3), "KILLSWITCH sends LOCK")
-    c.check(button.wait(r"killswitch held", t, 3), "BUTTON is locked")
+    c.check(ks.wait(r"KILLSWITCH locked: sending LOCK", t, 3), "KILLSWITCH enters locked mode and sends LOCK")
+    c.check(button.wait(r"killswitch held, button locked", t, 3), "BUTTON is locked")
     t = time.monotonic()
     button.send("fire")
     c.check(not button.wait(r"ADHD style sending BANG", t, 2), "BUTTON ignores a press while locked")
     t = time.monotonic()
     ks.send("free")
-    c.check(ks.wait(r"KILLSWITCH released: sending FREE", t, 3), "KILLSWITCH sends FREE")
-    c.check(button.wait(r"killswitch released, button works again", t, 3), "BUTTON is unlocked")
+    c.check(ks.wait(r"KILLSWITCH unlocked: sending FREE", t, 3), "KILLSWITCH sends FREE")
+    c.check(button.wait(r"lock ended \(LOCKs stopped or FREE\)", t, 3), "BUTTON is unlocked")
     t = time.monotonic()
     button.send("fire")
     LAST_FIRE[0] = t
@@ -302,29 +302,25 @@ def test_lock_during_show(boards, c):
     hit = banger.wait(r"SHOW done ms=\d+ duration=(\d+)", t0, 25)
     c.check(hit and SHOW_MIN_MS <= int(hit[1].group(1)) <= SHOW_MAX_MS,
             "the show ran to the end while locked")
-    ks.send("free")
-    # a lock lasts 30 s at most: hold it again over the end of the BUTTON's show + cooldown
-    time.sleep(max(0, t0 + TIMING["wait"] + TIMING["cooldown"] - 5 - time.monotonic()))
-    ks.send("lock")
+    # the lock stays on (no timer): the BUTTON is locked when its show + cooldown is over
     hit = button.wait(r"BUTTON state 3 -> 0", t0, button_cycle() + 10)
-    c.check(hit, "BUTTON locks when the show + cooldown is over (still held)")
+    c.check(hit, "BUTTON locks when the show + cooldown is over (still locked)")
     ks.send("free")
-    c.check(button.wait(r"killswitch released, button works again", t0, 3), "BUTTON unlocks on release")
+    c.check(button.wait(r"lock ended \(LOCKs stopped or FREE\)", t0, 3), "BUTTON unlocks on FREE")
 
 
-def test_lock_expiry(boards, c):
-    c.begin("lock_expiry: a switch left on expires after LOCK_MAX_MS (30 s), on both sides")
+def test_lock_hold(boards, c):
+    c.begin("lock_hold: a lock has no timer: still locked after 35 s, unlocked by FREE")
     button = role_board(boards, "BUTTON")
     ks = role_board(boards, "KILLSWITCH")
     t = time.monotonic()
     ks.send("lock")
-    hit = ks.wait(r"lock expired", t, 25)
-    c.check(hit and 28 <= hit[0] - t <= 33, f"KILLSWITCH expires the lock at {(hit[0]-t) if hit else float('nan'):.1f} s")
-    # the KILLSWITCH's FREE at the expiry may reach the BUTTON before its own timer: either ends the lock
-    hit = button.wait(r"lock expired|killswitch released", t, 25)
-    c.check(hit and 28 <= hit[0] - t <= 33, "BUTTON is unlocked at the same time (its own expiry or the FREE)")
+    c.check(button.wait(r"killswitch held, button locked", t, 3), "BUTTON is locked")
+    time.sleep(35)
+    c.check(not button.find(r"lock ended", t), "BUTTON is still locked after 35 s")
+    c.check(not ks.find(r"KILLSWITCH unlocked", t), "KILLSWITCH is still locked after 35 s")
     ks.send("free")
-    c.check(ks.wait(r"KILLSWITCH released", t, 3), "KILLSWITCH released")
+    c.check(button.wait(r"lock ended \(LOCKs stopped or FREE\)", t, 3), "BUTTON unlocks on FREE")
 
 
 def test_mash_button(boards, c):
@@ -356,7 +352,6 @@ def test_lock_storm(boards, c):
         ks.send("free")
         time.sleep(0.25)
     time.sleep(1)
-    c.check(not ks.find(r"lock expired", t0), "no lock expired during the storm (every lock was released)")
     t = time.monotonic()
     button.send("fire")
     LAST_FIRE[0] = t
@@ -378,7 +373,7 @@ def test_lock_press_race(boards, c):
         time.sleep(1)
         if button.find(r"ADHD style sending BANG", t):
             LAST_FIRE[0] = t                 # the press won the race: a show + cooldown to wait out
-        ok = button.find(r"killswitch released", t) or button.find(r"ADHD style sending BANG", t)
+        ok = button.find(r"lock ended", t) or button.find(r"ADHD style sending BANG", t)
         c.check(ok, f"round {i}: the BUTTON is unlocked after the release")
     wait_button_ready()
     t = time.monotonic()
@@ -482,9 +477,9 @@ TESTS = {
     "lock_press_race": (test_lock_press_race, ["BUTTON", "KILLSWITCH"]),
     "lock": (test_lock, ["BUTTON", "KILLSWITCH"]),
     "lock_during_show": (test_lock_during_show, ["BUTTON", "BANGER", "KILLSWITCH"]),
-    "lock_expiry": (test_lock_expiry, ["BUTTON", "KILLSWITCH"]),
+    "lock_hold": (test_lock_hold, ["BUTTON", "KILLSWITCH"]),
 }
-ORDER = ["single_show", "repeat", "cooldown", "mash_button", "button_glitch", "button_stuck", "button_chatter", "lock", "lock_storm", "lock_press_race", "lock_during_show", "lock_expiry"]
+ORDER = ["single_show", "repeat", "cooldown", "mash_button", "button_glitch", "button_stuck", "button_chatter", "lock", "lock_storm", "lock_press_race", "lock_during_show", "lock_hold"]
 
 
 def main():

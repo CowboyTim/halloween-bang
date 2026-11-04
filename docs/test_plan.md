@@ -33,11 +33,12 @@ wait and the cooldown from the `status` replies and adapts. Never use a shortene
 | `button_glitch` | `glitch` 20 times (an interrupt edge with the pin HIGH again: noise) | no BANG, no show; the BUTTON logs the ignored glitches |
 | `button_stuck` | `hold` for one show + cooldown + 20 s, then `release`, then `fire` | ONE show while stuck (not one after every cooldown); the BUTTON reports the stuck button (lamp flicker); letting go is not a press; a real press afterwards works |
 | `button_chatter` | `chatter` (5 ms on / 5 ms off) for 20 s | no BANG, no show |
-| `lock` | `lock` to the KILLSWITCH, then `fire` to the BUTTON, then `free` | the BUTTON locks while the KILLSWITCH is held and ignores a press; it unlocks on `free` and fires again |
-| `lock_storm` | 20 quick `lock` / `free` cycles | no lock expires; the BUTTON fires afterwards (not stuck locked) |
-| `lock_press_race` | `lock` and `fire` within 50 ms, 5 rounds | the BUTTON is unlocked after each release and fires afterwards |
-| `lock_during_show` | `fire` to the BUTTON, `lock` 2 s later, `free` after the show | the show runs to its end while locked (a lock does not stop a show); the BUTTON goes to LOCKED when the show is over (still held); unlocks on `free` |
-| `lock_expiry` | `lock` to the KILLSWITCH and hold it | the KILLSWITCH and the BUTTON both expire the lock after `LOCK_MAX_MS` (30 s), 28-33 s from the lock |
+| `lock` | `lock` to the KILLSWITCH (locked mode), then `fire` to the BUTTON, then `free` | the BUTTON locks on the LOCK stream and ignores a press; `free` (FREE) unlocks it and it fires again |
+| `lock_storm` | 20 quick `lock` / `free` cycles | the BUTTON fires afterwards (not stuck locked) |
+| `lock_press_race` | `lock` and `fire` within 50 ms, 5 rounds | the BUTTON is unlocked after each `free` and fires afterwards |
+| `lock_during_show` | `fire` to the BUTTON, `lock` 2 s later, `free` after the show | the show runs to its end while locked (a lock does not stop a show); the BUTTON goes to LOCKED when the show is over (still locked); unlocks on `free` |
+| `lock_hold` | `lock` to the KILLSWITCH, wait 35 s | no timer: the BUTTON and the KILLSWITCH are still locked after 35 s; `free` unlocks the BUTTON |
+| (manual) dead-man | `lock`, then unplug or reset the KILLSWITCH | the BUTTON unlocks within 1 s of the LOCK stream stopping (not in the bench suite: needs a physical unplug) |
 
 The timings checked in a run come from the logs (`SHOW done ... duration=`, `SND1 sent`, `STRB sent`,
 `frames=`). The host arrival times of two boards' lines differ by the USB latency: a 0.5 s window is

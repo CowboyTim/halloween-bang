@@ -185,7 +185,6 @@ uint8_t stroboAddress[STROBO_COUNT][6] = { STROBO_MACS };
 volatile uint8_t snd_req = 0;        // EXPLOSION: SOUND_1 or SOUND_2 announced by the BANGER
 volatile uint8_t strb_req = 0;       // STROBO: "STRB" received
 #ifdef TEST_SERIAL
-uint8_t test_hold = 0;              // KILLSWITCH test build: held by the "lock" command until "free"
 uint8_t  test_pin_mode = 0;         // BUTTON test build: 0 = the real pin, 1 = held LOW ("hold"), 2 = chatter ("chatter")
 uint32_t test_press_until = 0;      // BUTTON test build: "fire" reads the pin LOW until then (a clean 100 ms press)
 #endif
@@ -461,42 +460,37 @@ void IRAM_ATTR button_pressed() {
 //  Three units talk over ESP-NOW. LOCK / FREE use broadcast, so the KILLSWITCH needs no MAC
 //  address. The BUTTON sends nothing back: its lamp shows the actor what it is doing.
 //
-//    KILLSWITCH --"LOCK" (while held) / "FREE"-->  BUTTON  --"BANG"-->  BANGER
+//    KILLSWITCH --"LOCK" (stream while locked) / "FREE"-->  BUTTON  --"BANG"-->  BANGER
 //
-//  The BUTTON always works, except while the actor holds the KILLSWITCH button down (or a
-//  switch-style button is closed). While held, the KILLSWITCH repeats "LOCK" every
-//  KILL_LOCK_PERIOD_MS and the BUTTON stays LOCKED as long as a LOCK arrived within the last
-//  LOCK_TIMEOUT_MS. Release sends "FREE" (KILL_REPEATS times) so it is READY again at once.
-//  If those are lost, or the KILLSWITCH resets, goes out of range or runs flat, the lock just
-//  times out: a missing message can never keep the button locked. No KILLSWITCH = never locked.
-//  A lock also ends by itself after LOCK_MAX_MS, even while still held (a switch left on):
-//  the BUTTON then ignores LOCK until the killswitch is released, and the KILLSWITCH stops
-//  sending LOCK and blinks fast ("expired, release it").
+//  The lock is kept alive by the KILLSWITCH (a dead-man switch): while it is in locked mode it
+//  sends "LOCK" every KILL_LOCK_PERIOD_MS, and the BUTTON is LOCKED while LOCKs keep arriving. A
+//  press of the KILLSWITCH toggles the mode; leaving it sends "FREE" (KILL_REPEATS times). There is
+//  no timer in the lock itself: it lasts as long as the act needs. If the KILLSWITCH stops, is
+//  unplugged, resets or runs flat, the stream stops and the BUTTON unlocks LOCK_TIMEOUT_MS later.
+//  No KILLSWITCH = never locked, and at boot the KILLSWITCH is unlocked and silent.
 //
 //  Button states:
-//    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY (LOCKED if still held)
-//    READY --LOCK--> LOCKED --(FREE, no LOCK for LOCK_TIMEOUT_MS or LOCK_MAX_MS; button released)--> READY
+//    boot -> READY --press--> SHOW --(WAIT_TIME_BUTTON)--> READY (LOCKED if still locked)
+//    READY --LOCK--> LOCKED --(no LOCK for LOCK_TIMEOUT_MS, or FREE; button released)--> READY
 //    A LOCK during SHOW does not stop the show (it already runs on the BANGER).
 //    Presses in any state except READY are thrown away.
 //
-//  KILLSWITCH unit: ONE push button or switch. Its built-in LED is on while it is held (the
-//  button is being locked), blinks fast once LOCK_MAX_MS has run out, and blinks once at power-up.
+//  KILLSWITCH unit: ONE push button or switch. Its built-in LED is on while it is locked, and
+//  blinks once at power-up.
 // -------------------------------------------------------------------------
 
 #define LOCK_TIMEOUT_MS        1000    // BUTTON: LOCKED until no "LOCK" arrived for this long
 #define KILL_LOCK_PERIOD_MS    150     // KILLSWITCH: "LOCK" is repeated this often while held (several may get lost)
-#ifndef LOCK_MAX_MS
-#define LOCK_MAX_MS            30000   // a lock ends by itself after this long, even if the killswitch stays held
-
 // Wired killswitch on the BUTTON: a normally-open switch to GND on a long cable (up to about 10 m), held = locked,
 // OR'ed with the radio killswitch. A long wire picks up noise and a false lock blocks the button, so the line must
 // stay LOW for WIRED_KILL_ENGAGE_MS before it counts; releasing is quick. Wiring (see the BUTTON schematic): twisted
 // pair, 2.2 kohm pull-up to 3.3 V at this end (the internal one is too weak for a long wire), 1 kohm in series
-// with the pin and 100 nF from the pin to GND.
+// with the pin and 100 nF from the pin to GND. Unlike the radio lock, the wired one ends by itself after
+// WIRED_LOCK_MAX_MS (a stuck or shorted wire must not block the button for good).
 #define WIRED_KILL_PIN         GPIO_NUM_1   // on BUTTON
 #define WIRED_KILL_ENGAGE_MS   100          // LOW at least this long = held
 #define WIRED_KILL_RELEASE_MS  30           // HIGH at least this long = released
-#endif
+#define WIRED_LOCK_MAX_MS      30000        // wired lock ignored after this long held, until released
 
 // BUTTON lamp (12 V via the 2N2222 on LED_12V_PIN, PWM)
 #define LAMP_PWM_FREQ          2000    // Hz
@@ -561,8 +555,6 @@ uint8_t button_level(){
 uint32_t last_lamp_ms      = 0;
 uint8_t  bang_repeats_left = 0;     // BANG copies still to send
 uint32_t bang_next_ms      = 0;
-uint32_t lock_stream_since = 0;     // millis() when the current run of LOCKs began (0 = none)
-uint8_t  lock_expired      = 0;     // 1 = this run of LOCKs lasted LOCK_MAX_MS: ignored until released
 
 void button_set_state(uint8_t s) {
   if (s == bstate) return;
@@ -608,10 +600,10 @@ uint32_t wired_low_since  = 0;     // millis() when the pin last went LOW (0 = i
 uint32_t wired_high_since = 0;     // millis() when the pin last went HIGH (0 = it is LOW)
 uint32_t wired_since      = 0;     // millis() when the current hold began
 uint8_t  wired_active     = 0;     // 1 = the wired killswitch is held
-uint8_t  wired_expired    = 0;     // 1 = held for LOCK_MAX_MS: ignored until the pin has been HIGH
+uint8_t  wired_expired    = 0;     // 1 = held for WIRED_LOCK_MAX_MS: ignored until the pin has been HIGH
 
-// LOW (switch to GND) for WIRED_KILL_ENGAGE_MS = held, HIGH for WIRED_KILL_RELEASE_MS = released. Like the radio
-// lock it never lasts longer than LOCK_MAX_MS: a stuck or shorted wire is ignored until it goes HIGH again.
+// LOW (switch to GND) for WIRED_KILL_ENGAGE_MS = held, HIGH for WIRED_KILL_RELEASE_MS = released. It never lasts
+// longer than WIRED_LOCK_MAX_MS: a stuck or shorted wire is ignored until it goes HIGH again.
 // A cut wire reads HIGH (pull-up) = not held, so the button works.
 static bool wired_kill_held(uint32_t now, int level){
   if (level == LOW) {
@@ -631,8 +623,8 @@ static bool wired_kill_held(uint32_t now, int level){
       wired_expired = 0;
     }
   }
-  if (wired_active && now - wired_since >= LOCK_MAX_MS) {
-    LOG("wired killswitch held for %d s: lock expired, ignored until it is released", LOCK_MAX_MS / 1000);
+  if (wired_active && now - wired_since >= WIRED_LOCK_MAX_MS) {
+    LOG("wired killswitch held for %d s: lock expired, ignored until it is released", WIRED_LOCK_MAX_MS / 1000);
     wired_active  = 0;
     wired_expired = 1;
   }
@@ -686,18 +678,8 @@ void do_button_loop(){
   }
   // signed: the callback may have stored a millis() a little newer than "now"
   uint32_t lock_ms = lock_seen_ms;
+  // the lock is the KILLSWITCH's LOCK stream: no timer of its own, it ends when the stream stops (or FREE)
   bool held = lock_ms && (int32_t)(now - lock_ms) < LOCK_TIMEOUT_MS;
-  // a lock never lasts longer than LOCK_MAX_MS, however long the killswitch is held
-  if (!held) {
-    lock_stream_since = 0;
-    lock_expired      = 0;
-  } else if (!lock_stream_since) {
-    lock_stream_since = now ? now : 1;
-  } else if (!lock_expired && now - lock_stream_since >= LOCK_MAX_MS) {
-    LOG("killswitch held for %d s: lock expired, ignored until it is released", LOCK_MAX_MS / 1000);
-    lock_expired = 1;
-  }
-  if (lock_expired) held = false;
   if (wired_kill_held(now, digitalRead(WIRED_KILL_PIN))) held = true;   // OR with the wired killswitch
 
   // button released for at least RELEASE_MIN_MS (a button that is held down must be let go first)
@@ -707,7 +689,7 @@ void do_button_loop(){
     case BS_LOCKED:
       if (!held && released) {
         // a press has to start while READY: "released" means the button is up, so none is going on
-        LOG("killswitch released, button works again (lock came via:%s%s%s)",
+        LOG("lock ended (LOCKs stopped or FREE), button works again (lock came via:%s%s%s)",
             (lock_links & LINK_ESPNOW) ? " ESP-NOW" : "", (lock_links & LINK_433) ? " 433 MHz" : "",
             (lock_links & LINK_WIRED) ? " wired" : "");
         lock_links = 0;
@@ -774,12 +756,11 @@ void do_button_loop(){
 uint8_t     ks_stable       = HIGH;   // debounced button level (LOW = held)
 uint8_t     ks_raw_last     = HIGH;
 uint32_t    ks_raw_since    = 0;
-uint32_t    ks_next_lock_ms = 0;      // when the next "LOCK" goes out (while held)
-uint8_t     ks_free_left    = 0;      // "FREE" copies still to send (after release)
+uint8_t     ks_locked       = 0;      // 1 = locked mode: "LOCK" goes out until the next press (which sends "FREE")
+uint32_t    ks_next_lock_ms = 0;      // when the next "LOCK" goes out (while locked)
+uint8_t     ks_free_left    = 0;      // "FREE" copies still to send (after unlock)
 uint32_t    ks_next_free_ms = 0;
 uint32_t    ks_blink_until  = 0;      // power-up blink
-uint32_t    ks_held_since   = 0;      // millis() when the current hold began
-uint8_t     ks_expired      = 0;      // 1 = held for LOCK_MAX_MS: LOCK stopped until released
 
 static bool ks_radio_idle(){
 #if USE_RF433
@@ -831,42 +812,39 @@ void killswitch_setup(){
   LOG("killswitch Wi-Fi TX power: %d (0.25 dBm units)", (int)WiFi.getTxPower());
 }
 
+// Locked mode: "LOCK" goes out every KILL_LOCK_PERIOD_MS until the mode is switched off, which sends "FREE".
+// The mode has no timer: it ends only with a press (or a reset of this unit). If the unit stops, the LOCK
+// stream stops and the BUTTON unlocks itself within LOCK_TIMEOUT_MS (a dead-man switch).
+static void ks_set_locked(uint8_t on, uint32_t now){
+  ks_locked = on;
+  if (on) {
+    ks_free_left    = 0;
+    ks_next_lock_ms = now;
+    LOG("KILLSWITCH locked: sending LOCK until the next press");
+  } else {
+    ks_free_left    = KILL_REPEATS;
+    ks_next_free_ms = now;
+    LOG("KILLSWITCH unlocked: sending FREE");
+  }
+}
+
 void do_killswitch_loop(){
   uint32_t now = millis();
 
   // debounce: the level must stay the same for 30 ms.
   // The external button and the BOOT button do the same (LOW = held).
   uint8_t raw = (digitalRead(KILL_BUTTON_PIN) == LOW || digitalRead(KILL_BOOT_PIN) == LOW) ? LOW : HIGH;
-#ifdef TEST_SERIAL
-  if(test_hold) raw = LOW;         // "lock" command (test build)
-#endif
   if (raw != ks_raw_last) {
     ks_raw_last  = raw;
     ks_raw_since = now;
   }
   if (raw != ks_stable && now - ks_raw_since >= 30) {
     ks_stable = raw;
-    if (ks_stable == LOW) {                         // held: start locking at once
-      LOG("KILLSWITCH held: sending LOCK");
-      ks_free_left    = 0;
-      ks_next_lock_ms = now;
-      ks_held_since   = now;
-      ks_expired      = 0;
-    } else {                                        // released: unlock now
-      LOG("KILLSWITCH released: sending FREE");
-      ks_free_left    = KILL_REPEATS;
-      ks_next_free_ms = now;
-      ks_expired      = 0;
-    }
-  }
-  if (ks_stable == LOW && !ks_expired && now - ks_held_since >= LOCK_MAX_MS) {
-    LOG("KILLSWITCH held for %d s: lock expired, sending FREE (release it to lock again)", LOCK_MAX_MS / 1000);
-    ks_expired      = 1;
-    ks_free_left    = KILL_REPEATS;
-    ks_next_free_ms = now;
+    // a press (the hold starts) toggles the mode; the release does nothing
+    if (ks_stable == LOW) ks_set_locked(!ks_locked, now);
   }
 
-  if (ks_stable == LOW && !ks_expired && (int32_t)(now - ks_next_lock_ms) >= 0) {
+  if (ks_locked && (int32_t)(now - ks_next_lock_ms) >= 0) {
     ks_send("LOCK");
     ks_next_lock_ms = now + KILL_LOCK_PERIOD_MS;
   }
@@ -878,10 +856,8 @@ void do_killswitch_loop(){
     ks_next_free_ms = now + KILL_FREE_GAP_MS;
   }
 
-  // LED: on while held (= the button is being locked), fast blink once that has expired,
-  // plus the power-up blink
-  uint8_t on = ks_expired ? (now % 200) < 100
-                          : (ks_stable == LOW) || (int32_t)(ks_blink_until - now) > 0;
+  // LED: on while locked, plus the power-up blink
+  uint8_t on = ks_locked || (int32_t)(ks_blink_until - now) > 0;
   digitalWrite(KILL_LED_PIN, on ? KILL_LED_ON : !KILL_LED_ON);
 #ifdef KILL_EXT_LED_PIN
   digitalWrite(KILL_EXT_LED_PIN, on ? HIGH : LOW);
@@ -1231,13 +1207,13 @@ static void test_command(const char *cmd){
 #endif
   } else if(!strcmp(cmd, "lock")){
 #ifdef KILLSWITCH
-    test_hold = 1;
     LOG("TEST lock ms=%lu", (unsigned long)millis());
+    if(!ks_locked) ks_set_locked(1, millis());     // the same as a press that locks
 #endif
   } else if(!strcmp(cmd, "free")){
 #ifdef KILLSWITCH
-    test_hold = 0;
     LOG("TEST free ms=%lu", (unsigned long)millis());
+    if(ks_locked) ks_set_locked(0, millis());      // the same as a press that unlocks
 #endif
   } else {
     LOG("TEST unknown command: %s", cmd);
